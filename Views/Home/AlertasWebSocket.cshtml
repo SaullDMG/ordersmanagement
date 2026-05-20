@@ -1,0 +1,439 @@
+@model OrdersManagement.Models.Diagnostico
+@{
+    ViewData["Title"] = "Alertas de Presupuesto - WebSocket";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .alert-card {
+            border-left: 4px solid #dc3545;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        .alert-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .alert-danger-custom {
+            background-color: #fff3f3;
+            border: 1px solid #ffcdd2;
+        }
+        .badge-warning {
+            background-color: #ff9800;
+            color: white;
+        }
+        .alerta-nueva {
+            animation: slideIn 0.5s ease;
+        }
+        @@keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .toast-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            min-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h3>📡 Monitoreo de Presupuestos - WebSocket</h3>
+                        <p class="mb-0">Alertas en tiempo real cuando los diagnósticos superan el presupuesto</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="connectionStatus">Estado de conexión:</label>
+                                    <div id="connectionStatus" class="badge bg-secondary">Desconectado</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button id="reconectarBtn" class="btn btn-primary btn-sm">
+                                    🔄 Reconectar
+                                </button>
+                                <button id="limpiarAlertasBtn" class="btn btn-secondary btn-sm">
+                                    🗑️ Limpiar alertas
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="alertasContainer">
+                            <div class="alert alert-info">
+                                <strong>💡 Información:</strong> Conéctate al WebSocket para recibir alertas en tiempo real 
+                                cuando se cree o actualice un diagnóstico que supere el presupuesto de la orden.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast de notificación -->
+    <div class="toast-notification" id="toastContainer"></div>
+
+<script>
+    let webSocket = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+
+    // ==================== ALMACENAMIENTO LOCAL ====================
+    
+    // Clave para guardar alertas en localStorage
+    const STORAGE_KEY = 'alertas_presupuesto';
+    
+    // Función para guardar alertas en localStorage
+    function guardarAlertasEnStorage() {
+        const container = document.getElementById("alertasContainer");
+        const alertas = [];
+        
+        // Recorrer todas las alertas visibles (excluyendo el mensaje de información)
+        const alertasDivs = container.querySelectorAll('.alert-card:not(.alert-info)');
+        alertasDivs.forEach(alert => {
+            // Extraer los datos de la alerta
+            const ordenId = alert.querySelector('p strong')?.textContent?.match(/\d+/)?.[0];
+            if (ordenId) {
+                alertas.push({
+                    html: alert.outerHTML,
+                    timestamp: alert.dataset.timestamp || Date.now()
+                });
+            }
+        });
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(alertas));
+    }
+    
+    // Función para cargar alertas desde localStorage
+    function cargarAlertasDesdeStorage() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
+        
+        try {
+            const alertasGuardadas = JSON.parse(stored);
+            const container = document.getElementById("alertasContainer");
+            
+            // Limpiar solo las alertas (conservar el mensaje de info)
+            const alertasExistentes = container.querySelectorAll('.alert-card:not(.alert-info)');
+            alertasExistentes.forEach(alert => alert.remove());
+            
+            // Restaurar alertas guardadas
+            alertasGuardadas.forEach(alerta => {
+                container.insertAdjacentHTML('afterbegin', alerta.html);
+            });
+            
+            console.log(`✅ Se restauraron ${alertasGuardadas.length} alertas`);
+        } catch (e) {
+            console.error("Error al cargar alertas:", e);
+        }
+    }
+    
+    // Función para limpiar todas las alertas (mantiene el mensaje de info)
+    function limpiarAlertas() {
+        const container = document.getElementById("alertasContainer");
+        
+        // Eliminar solo las alertas, no el mensaje de información
+        const alertas = container.querySelectorAll('.alert-card:not(.alert-info)');
+        alertas.forEach(alert => alert.remove());
+        
+        // Limpiar toasts
+        const toastContainer = document.getElementById("toastContainer");
+        if (toastContainer) {
+            toastContainer.innerHTML = '';
+        }
+        
+        // Limpiar localStorage
+        localStorage.removeItem(STORAGE_KEY);
+        
+        // Mostrar mensaje de confirmación
+        agregarMensajeSistema("🧹 Todas las alertas han sido eliminadas permanentemente");
+    }
+    
+    // ==================== FUNCIONES EXISTENTES MODIFICADAS ====================
+    
+    // Función para conectar WebSocket
+    function connectWebSocket() {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        updateConnectionStatus("Conectando...", "warning");
+        
+        webSocket = new WebSocket(wsUrl);
+        
+        webSocket.onopen = function(event) {
+            console.log("WebSocket conectado", event);
+            updateConnectionStatus("Conectado", "success");
+            reconnectAttempts = 0;
+            agregarMensajeSistema("✅ Conectado al servidor de alertas");
+        };
+        
+        webSocket.onmessage = function(event) {
+            console.log("Mensaje recibido:", event.data);
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === "alert") {
+                    const alerta = JSON.parse(data.message);
+                    procesarAlerta(alerta);
+                } else {
+                    procesarAlerta(data);
+                }
+            } catch (error) {
+                console.error("Error al parsear mensaje:", error);
+                agregarAlertaError("Error al procesar mensaje del servidor");
+            }
+        };
+        
+        webSocket.onclose = function(event) {
+            console.log("WebSocket cerrado", event);
+            updateConnectionStatus("Desconectado", "danger");
+            agregarMensajeSistema("⚠️ Desconectado del servidor. Intentando reconectar...");
+            
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                setTimeout(connectWebSocket, 3000 * reconnectAttempts);
+            } else {
+                agregarAlertaError("❌ No se pudo reconectar. Recarga la página.");
+            }
+        };
+        
+        webSocket.onerror = function(error) {
+            console.error("Error en WebSocket:", error);
+            updateConnectionStatus("Error", "danger");
+            agregarAlertaError("Error en la conexión WebSocket");
+        };
+    }
+    
+    // Función para mostrar alerta de presupuesto (MODIFICADA - guarda en localStorage)
+    function mostrarAlertaPresupuesto(alerta) {
+        const container = document.getElementById("alertasContainer");
+        const alertaId = Date.now();
+        
+        // Crear HTML de la alerta con data-timestamp
+        const alertaHtml = `
+            <div class="alert alert-danger-custom alert-card alerta-nueva" id="alerta-${alertaId}" data-timestamp="${alertaId}" data-orden-id="${alerta.ordenServicioId}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="text-danger mb-2">
+                            🚨 ALERTA DE PRESUPUESTO SUPERADO
+                        </h5>
+                        <p class="mb-1"><strong>📋 Orden #${alerta.ordenServicioId}</strong></p>
+                        <p class="mb-1"><strong>👤 Cliente:</strong> ${alerta.clienteNombre || "No especificado"}</p>
+                        <p class="mb-1"><strong>🖨️ Equipo:</strong> ${alerta.equipoDescripcion || "No especificado"}</p>
+                        <hr>
+                        <p class="mb-1"><strong>💰 Presupuesto:</strong> $${formatearNumero(alerta.presupuesto)}</p>
+                        <p class="mb-1"><strong>💵 Costo total:</strong> $${formatearNumero(alerta.costoActual || alerta.costoTotal)}</p>
+                        <p class="mb-1"><strong>📊 Diferencia:</strong> <span class="text-danger">+$${formatearNumero(alerta.diferencia)}</span></p>
+                        ${alerta.costoAnterior ? `<p class="mb-1"><strong>💰 Costo anterior:</strong> $${formatearNumero(alerta.costoAnterior)}</p>` : ''}
+                        <p class="mb-0 mt-2 text-muted small">🕒 ${new Date(alerta.fecha).toLocaleString()}</p>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarAlertaIndividual(${alertaId})">
+                        ✕
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Insertar al inicio del contenedor
+        container.insertAdjacentHTML('afterbegin', alertaHtml);
+        
+        // Guardar en localStorage
+        guardarAlertasEnStorage();
+        
+        // Reproducir sonido
+        reproducirSonido();
+    }
+    
+    // Función para eliminar una alerta individualmente
+    function eliminarAlertaIndividual(alertaId) {
+        const alerta = document.getElementById(`alerta-${alertaId}`);
+        if (alerta) {
+            alerta.remove();
+            guardarAlertasEnStorage();
+            agregarMensajeSistema("🗑️ Alerta eliminada");
+        }
+    }
+    
+    // Función para mostrar toast de notificación (PERMANENTE)
+    function mostrarToastNotification(alerta) {
+        const toastContainer = document.getElementById("toastContainer");
+        const toastId = `toast-${Date.now()}`;
+        
+        const toastHtml = `
+            <div id="${toastId}" class="toast show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+                <div class="toast-header bg-danger text-white">
+                    <strong class="me-auto">🚨 Nueva Alerta</strong>
+                    <small>Hace unos segundos</small>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    <strong>Orden #${alerta.ordenServicioId}</strong><br>
+                    Presupuesto superado por <strong>$${formatearNumero(alerta.diferencia)}</strong>
+                    <hr class="my-1">
+                    <small class="text-muted">Cliente: ${alerta.clienteNombre || 'N/A'}</small><br>
+                    <small class="text-muted">Equipo: ${alerta.equipoDescripcion || 'N/A'}</small>
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Los toasts permanecen hasta que el usuario los cierre
+    }
+    
+    // Función para formatear números
+    function formatearNumero(numero) {
+        if (!numero && numero !== 0) return "0.00";
+        return numero.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    // Función para agregar mensajes del sistema (MODIFICADA - no se guardan en storage)
+    function agregarMensajeSistema(mensaje) {
+        const container = document.getElementById("alertasContainer");
+        const systemHtml = `
+            <div class="alert alert-secondary alerta-nueva sistema-mensaje">
+                <strong>ℹ️ Sistema:</strong> ${mensaje}
+            </div>
+        `;
+        container.insertAdjacentHTML('afterbegin', systemHtml);
+        
+        // Eliminar mensajes del sistema después de 5 segundos
+        setTimeout(() => {
+            const msg = container.querySelector('.sistema-mensaje');
+            if (msg) msg.remove();
+        }, 5000);
+    }
+    
+    // Función para agregar alertas de error (MODIFICADA - no se guardan en storage)
+    function agregarAlertaError(mensaje) {
+        const container = document.getElementById("alertasContainer");
+        const errorHtml = `
+            <div class="alert alert-warning alerta-nueva error-mensaje">
+                <strong>⚠️ Error:</strong> ${mensaje}
+            </div>
+        `;
+        container.insertAdjacentHTML('afterbegin', errorHtml);
+        
+        // Eliminar mensajes de error después de 5 segundos
+        setTimeout(() => {
+            const msg = container.querySelector('.error-mensaje');
+            if (msg) msg.remove();
+        }, 5000);
+    }
+    
+    // Función para agregar información general (MODIFICADA - no se guardan en storage)
+    function agregarAlertaInfo(mensaje) {
+        const container = document.getElementById("alertasContainer");
+        const infoHtml = `
+            <div class="alert alert-info alerta-nueva info-mensaje">
+                <strong>📩 Mensaje:</strong> ${mensaje}
+            </div>
+        `;
+        container.insertAdjacentHTML('afterbegin', infoHtml);
+        
+        // Eliminar mensajes de información después de 5 segundos
+        setTimeout(() => {
+            const msg = container.querySelector('.info-mensaje');
+            if (msg) msg.remove();
+        }, 5000);
+    }
+    
+    // Función para actualizar estado de conexión
+    function updateConnectionStatus(status, type) {
+        const statusElement = document.getElementById("connectionStatus");
+        if (statusElement) {
+            statusElement.textContent = status;
+            statusElement.className = `badge bg-${type}`;
+        }
+    }
+    
+    // Función para procesar alerta recibida
+    function procesarAlerta(alerta) {
+        console.log("Procesando alerta:", alerta);
+        
+        if (alerta.tipo === "presupuesto_excedido" || alerta.tipo === "presupuesto_excedido_actualizado") {
+            mostrarAlertaPresupuesto(alerta);
+            mostrarToastNotification(alerta);
+        } else {
+            agregarAlertaInfo("Mensaje recibido: " + JSON.stringify(alerta));
+        }
+    }
+    
+    // Función para reproducir sonido
+    function reproducirSonido() {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 880;
+            gainNode.gain.value = 0.3;
+            
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 1);
+            oscillator.stop(audioContext.currentTime + 1);
+        } catch(e) {
+            console.log("No se pudo reproducir sonido:", e);
+        }
+    }
+    
+    // ==================== INICIALIZACIÓN ====================
+    
+    // Esperar a que el DOM esté listo
+    document.addEventListener('DOMContentLoaded', function() {
+        // Cargar alertas guardadas al iniciar
+        cargarAlertasDesdeStorage();
+        
+        // Configurar eventos de UI
+        const reconectarBtn = document.getElementById("reconectarBtn");
+        const limpiarAlertasBtn = document.getElementById("limpiarAlertasBtn");
+        
+        if (reconectarBtn) {
+            reconectarBtn.addEventListener("click", () => {
+                if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                    webSocket.close();
+                }
+                setTimeout(connectWebSocket, 500);
+            });
+        }
+        
+        if (limpiarAlertasBtn) {
+            limpiarAlertasBtn.addEventListener("click", limpiarAlertas);
+        }
+        
+        // Conectar WebSocket
+        connectWebSocket();
+    });
+    
+    // Guardar alertas antes de cerrar la página
+    window.addEventListener("beforeunload", () => {
+        guardarAlertasEnStorage();
+        if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+            webSocket.close();
+        }
+    });
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

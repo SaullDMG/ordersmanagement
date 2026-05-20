@@ -1086,5 +1086,67 @@ namespace OrdersManagement.Controllers
                 return StatusCode(500, new { mensaje = "Error al buscar órdenes", error = ex.Message });
             }
         }
+    
+    
+        // GET: api/ordenservicio/{id}/diagnostico-resumen
+        [HttpGet("{id}/diagnostico-resumen")]
+        public async Task<ActionResult<object>> GetDiagnosticoResumen(int id)
+        {
+            try
+            {
+                var orden = await _db.OrdenesServicio
+                    .Include(o => o.Equipo)
+                        .ThenInclude(e => e.Cliente)
+                    .Include(o => o.Diagnosticos)
+                    .FirstOrDefaultAsync(o => o.OrdenServicioId == id);
+
+                if (orden == null)
+                {
+                    return NotFound(new { mensaje = $"Orden con ID {id} no encontrada" });
+                }
+
+                var costoTotalDiagnosticos = orden.Diagnosticos != null 
+                    ? orden.Diagnosticos.Sum(d => d.CostoRep + d.CostoRef) 
+                    : 0;
+
+                var resumen = new
+                {
+                    orden.OrdenServicioId,
+                    orden.Presupuesto,
+                    CostoTotalDiagnosticos = costoTotalDiagnosticos,
+                    Diferencia = costoTotalDiagnosticos - orden.Presupuesto,
+                    SuperaPresupuesto = costoTotalDiagnosticos > orden.Presupuesto,
+                    PorcentajeEjecutado = orden.Presupuesto > 0 
+                        ? (costoTotalDiagnosticos / orden.Presupuesto) * 100 
+                        : 0,
+                    DiagnosticoCount = orden.Diagnosticos != null ? orden.Diagnosticos.Count : 0,
+                    Cliente = orden.Equipo?.Cliente != null ? new
+                    {
+                        orden.Equipo.Cliente.Nombre,
+                        orden.Equipo.Cliente.Telefono
+                    } : null,
+                    Equipo = orden.Equipo != null ? new
+                    {
+                        orden.Equipo.Marca,
+                        orden.Equipo.Modelo,
+                        orden.Equipo.Serie
+                    } : null
+                };
+
+                return Ok(new
+                {
+                    mensaje = "Resumen de diagnósticos obtenido exitosamente",
+                    resumen = resumen
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener resumen", error = ex.Message });
+            }
+        }
+            
+    
+    
+    
     }
 }

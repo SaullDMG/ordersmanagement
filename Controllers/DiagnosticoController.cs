@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using OrdersManagement.Data;
 using OrdersManagement.Models;
 using System.Text.Json;
+using OrdersManagement.Services;
 
 namespace OrdersManagement.Controllers
 {
@@ -11,10 +12,12 @@ namespace OrdersManagement.Controllers
     public class DiagnosticoController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
+        private readonly WebSocketService _webSocketService;
 
-        public DiagnosticoController(ApplicationDbContext db)
+        public DiagnosticoController(ApplicationDbContext db, WebSocketService webSocketService)
         {
             _db = db;
+            _webSocketService = webSocketService;
         }
 
         // GET: api/diagnostico
@@ -286,20 +289,10 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Validar que los costos no sean negativos
-                if (diagnostico.CostoRep < 0)
-                {
-                    return BadRequest(new { mensaje = "El costo de reparación no puede ser negativo" });
-                }
-
-                if (diagnostico.CostoRef < 0)
-                {
-                    return BadRequest(new { mensaje = "El costo de refacción no puede ser negativo" });
-                }
-
                 // Validar que la orden de servicio exista
                 var ordenServicio = await _db.OrdenesServicio
                     .Include(o => o.Equipo)
+                        .ThenInclude(e => e!.Cliente)
                     .FirstOrDefaultAsync(o => o.OrdenServicioId == diagnostico.OrdenServicioId);
 
                 if (ordenServicio == null)
@@ -313,38 +306,63 @@ namespace OrdersManagement.Controllers
                     return BadRequest(new { mensaje = "No se puede agregar un diagnóstico a una orden finalizada" });
                 }
 
+                // Calcular el nuevo costo total incluyendo el diagnóstico actual
+                var diagnosticosExistentes = await _db.Diagnosticos
+                    .Where(d => d.OrdenServicioId == diagnostico.OrdenServicioId)
+                    .ToListAsync();
+                
+                var costoTotalActual = diagnosticosExistentes.Sum(d => d.CostoRep + d.CostoRef);
+                var nuevoCostoTotal = costoTotalActual + diagnostico.CostoRep + diagnostico.CostoRef;
+                
+                // Verificar si supera el presupuesto
+                bool superaPresupuesto = nuevoCostoTotal > ordenServicio.Presupuesto;
+
                 // Agregar diagnóstico
                 await _db.Diagnosticos.AddAsync(diagnostico);
                 await _db.SaveChangesAsync();
 
-                // Respuesta sin referencias circulares
-                var diagnosticoCreado = new
+                // 🔥 ENVIAR ALERTA WEBSOCKET si supera el presupuesto
+                if (superaPresupuesto)
                 {
-                    diagnostico.DiagnosticoId,
-                    diagnostico.DiagnosticoFalla,
-                    diagnostico.CostoRep,
-                    diagnostico.CostoRef,
-                    diagnostico.OrdenServicioId,
-                    CostoTotal = diagnostico.CostoRep + diagnostico.CostoRef,
-                    OrdenServicio = new
+                    var mensajeAlerta = new
                     {
-                        ordenServicio.OrdenServicioId,
-                        ordenServicio.Falla,
-                        ordenServicio.Estado,
-                        ordenServicio.Presupuesto,
-                        Equipo = ordenServicio.Equipo != null ? new
+                        tipo = "presupuesto_excedido",
+                        ordenServicioId = ordenServicio.OrdenServicioId,
+                        clienteNombre = ordenServicio.Equipo?.Cliente?.Nombre ?? "Cliente no especificado",
+                        equipoDescripcion = $"{ordenServicio.Equipo?.Marca} {ordenServicio.Equipo?.Modelo} - {ordenServicio.Equipo?.Serie}",
+                        presupuesto = ordenServicio.Presupuesto,
+                        costoTotal = nuevoCostoTotal,
+                        diferencia = nuevoCostoTotal - ordenServicio.Presupuesto,
+                        fecha = DateTime.Now,
+                        diagnosticos = new
                         {
-                            ordenServicio.Equipo.EquipoId,
-                            ordenServicio.Equipo.Marca,
-                            ordenServicio.Equipo.Modelo
-                        } : null
-                    }
-                };
+                            existentes = diagnosticosExistentes.Count,
+                            nuevo = new { diagnostico.DiagnosticoId, diagnostico.DiagnosticoFalla, costo = diagnostico.CostoRep + diagnostico.CostoRef }
+                        }
+                    };
 
-                return CreatedAtAction(nameof(GetDiagnostico), new { id = diagnostico.DiagnosticoId }, new
+                    await _webSocketService.SendAlertToClientsAsync(JsonSerializer.Serialize(mensajeAlerta));
+                }
+
+                // Respuesta exitosa
+                return Ok(new
                 {
-                    mensaje = "Diagnóstico creado exitosamente",
-                    diagnostico = diagnosticoCreado
+                    mensaje = superaPresupuesto 
+                        ? "Diagnóstico creado. ATENCIÓN: El costo total supera el presupuesto"
+                        : "Diagnóstico creado exitosamente",
+                    superaPresupuesto = superaPresupuesto,
+                    presupuesto = ordenServicio.Presupuesto,
+                    costoTotalAnterior = costoTotalActual,
+                    costoTotalActual = nuevoCostoTotal,
+                    diferencia = nuevoCostoTotal - ordenServicio.Presupuesto,
+                    diagnostico = new
+                    {
+                        diagnostico.DiagnosticoId,
+                        diagnostico.DiagnosticoFalla,
+                        diagnostico.CostoRep,
+                        diagnostico.CostoRef,
+                        CostoTotal = diagnostico.CostoRep + diagnostico.CostoRef
+                    }
                 });
             }
             catch (Exception ex)
@@ -363,17 +381,11 @@ namespace OrdersManagement.Controllers
                 // Validar que el ID coincida
                 if (id != diagnostico.DiagnosticoId)
                 {
-                    return BadRequest(new
-                    {
-                        mensaje = "El ID de la URL no coincide con el ID del diagnóstico",
-                        urlId = id,
-                        bodyId = diagnostico.DiagnosticoId
-                    });
+                    return BadRequest(new { mensaje = "El ID de la URL no coincide con el ID del diagnóstico" });
                 }
 
                 // Buscar el diagnóstico existente
                 var diagnosticoExistente = await _db.Diagnosticos
-                    .Include(d => d.OrdenServicio)
                     .FirstOrDefaultAsync(d => d.DiagnosticoId == id);
 
                 if (diagnosticoExistente == null)
@@ -381,31 +393,10 @@ namespace OrdersManagement.Controllers
                     return NotFound(new { mensaje = $"Diagnóstico con ID {id} no encontrado" });
                 }
 
-                // Validar modelo
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest(new
-                    {
-                        mensaje = "Datos inválidos",
-                        errores = ModelState.Values
-                            .SelectMany(v => v.Errors)
-                            .Select(e => e.ErrorMessage)
-                    });
-                }
-
-                // Validar que los costos no sean negativos
-                if (diagnostico.CostoRep < 0)
-                {
-                    return BadRequest(new { mensaje = "El costo de reparación no puede ser negativo" });
-                }
-
-                if (diagnostico.CostoRef < 0)
-                {
-                    return BadRequest(new { mensaje = "El costo de refacción no puede ser negativo" });
-                }
-
-                // Validar que la orden de servicio exista
+                // Obtener la orden de servicio
                 var ordenServicio = await _db.OrdenesServicio
+                    .Include(o => o.Equipo)
+                        .ThenInclude(e => e.Cliente)
                     .FirstOrDefaultAsync(o => o.OrdenServicioId == diagnostico.OrdenServicioId);
 
                 if (ordenServicio == null)
@@ -413,41 +404,60 @@ namespace OrdersManagement.Controllers
                     return BadRequest(new { mensaje = $"La orden de servicio con ID {diagnostico.OrdenServicioId} no existe" });
                 }
 
-                // Validar que la orden no esté finalizada
-                if (ordenServicio.Estado == "Finalizada")
-                {
-                    return BadRequest(new { mensaje = "No se puede modificar un diagnóstico de una orden finalizada" });
-                }
+                // Calcular costo total (excluyendo el diagnóstico actual, luego sumando el nuevo)
+                var otrosDiagnosticos = await _db.Diagnosticos
+                    .Where(d => d.OrdenServicioId == diagnostico.OrdenServicioId && d.DiagnosticoId != id)
+                    .ToListAsync();
+                
+                var costoOtros = otrosDiagnosticos.Sum(d => d.CostoRep + d.CostoRef);
+                var nuevoCostoTotal = costoOtros + diagnostico.CostoRep + diagnostico.CostoRef;
+                
+                bool superaPresupuesto = nuevoCostoTotal > ordenServicio.Presupuesto;
 
-                // Actualizar campos
+                // Guardar valores anteriores para comparación
+                var costoAnterior = diagnosticoExistente.CostoRep + diagnosticoExistente.CostoRef;
+                var costoAnteriorTotal = costoOtros + costoAnterior;
+
+                // Actualizar diagnóstico
                 diagnosticoExistente.DiagnosticoFalla = diagnostico.DiagnosticoFalla;
                 diagnosticoExistente.CostoRep = diagnostico.CostoRep;
                 diagnosticoExistente.CostoRef = diagnostico.CostoRef;
-                diagnosticoExistente.OrdenServicioId = diagnostico.OrdenServicioId;
 
-                _db.Entry(diagnosticoExistente).State = EntityState.Modified;
                 await _db.SaveChangesAsync();
 
-                // Respuesta sin referencias circulares
-                var diagnosticoActualizado = new
+                // 🔥 ENVIAR ALERTA si el presupuesto se superó o empeoró la situación
+                bool empeoroSituacion = superaPresupuesto && !(costoAnteriorTotal > ordenServicio.Presupuesto);
+
+                if (superaPresupuesto)
                 {
-                    diagnosticoExistente.DiagnosticoId,
-                    diagnosticoExistente.DiagnosticoFalla,
-                    diagnosticoExistente.CostoRep,
-                    diagnosticoExistente.CostoRef,
-                    diagnosticoExistente.OrdenServicioId,
-                    CostoTotal = diagnosticoExistente.CostoRep + diagnosticoExistente.CostoRef
-                };
+                    var mensajeAlerta = new
+                    {
+                        tipo = "presupuesto_excedido_actualizado",
+                        ordenServicioId = ordenServicio.OrdenServicioId,
+                        clienteNombre = ordenServicio.Equipo?.Cliente?.Nombre ?? "Cliente no especificado",
+                        equipoDescripcion = $"{ordenServicio.Equipo?.Marca} {ordenServicio.Equipo?.Modelo}",
+                        presupuesto = ordenServicio.Presupuesto,
+                        costoAnterior = costoAnteriorTotal,
+                        costoActual = nuevoCostoTotal,
+                        diferencia = nuevoCostoTotal - ordenServicio.Presupuesto,
+                        fecha = DateTime.Now,
+                        mensajeAdicional = empeoroSituacion ? "Se ha superado el presupuesto con esta actualización" : "El presupuesto sigue siendo superado"
+                    };
+
+                    await _webSocketService.SendAlertToClientsAsync(JsonSerializer.Serialize(mensajeAlerta));
+                }
 
                 return Ok(new
                 {
-                    mensaje = "Diagnóstico actualizado exitosamente",
-                    diagnostico = diagnosticoActualizado
+                    mensaje = superaPresupuesto 
+                        ? "Diagnóstico actualizado. ATENCIÓN: El costo total supera el presupuesto"
+                        : "Diagnóstico actualizado exitosamente",
+                    superaPresupuesto = superaPresupuesto,
+                    presupuesto = ordenServicio.Presupuesto,
+                    costoTotalAnterior = costoAnteriorTotal,
+                    costoTotalActual = nuevoCostoTotal,
+                    diferencia = nuevoCostoTotal - ordenServicio.Presupuesto
                 });
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                return StatusCode(409, new { mensaje = "Error de concurrencia al actualizar el diagnóstico" });
             }
             catch (Exception ex)
             {

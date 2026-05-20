@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrdersManagement.Data;
+using OrdersManagement.Services;
 using Pomelo.EntityFrameworkCore.MySql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,8 +20,35 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
 );
 
+// Registrar WebSocketService como singleton
+builder.Services.AddSingleton<WebSocketService>();
+
+builder.Services.AddSignalR();
+
 
 var app = builder.Build();
+
+app.UseWebSockets();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path == "/ws")
+    {
+        if (context.WebSockets.IsWebSocketRequest)
+        {
+            var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+            var webSocketService = context.RequestServices.GetRequiredService<WebSocketService>();
+            await webSocketService.HandleWebSocketAsync(context, webSocket);
+        }
+        else
+        {
+            context.Response.StatusCode = 400;
+        }
+    }
+    else
+    {
+        await next();
+    }
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
