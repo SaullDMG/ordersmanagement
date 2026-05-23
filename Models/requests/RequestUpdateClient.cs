@@ -1,15 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
-using ordersmanagement.Models;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace OrdersManagement.Models
+namespace ordersmanagement.Models.requests
 {
-    public class Cliente
+    public class RequestUpdateClient
     {
-        public int Id { get; set; } // Cambiado de ClienteId a Id
-
         [Required(ErrorMessage = "El Nombre es requerido")]
         public string? Nombre { get; set; }
 
@@ -19,9 +17,5 @@ namespace OrdersManagement.Models
         [Required(ErrorMessage = "El teléfono es requerido")]
         [StringLength(10, ErrorMessage = "El teléfono debe tener 10 dígitos")]
         public string? Telefono { get; set; }
-        
-        public virtual HashSet<Equipo>? Equipos { get; set; }
-
-        public virtual ICollection<Sucursal> Sucursales { get; set; } = new HashSet<Sucursal>();
     }
 }

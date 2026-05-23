@@ -7,48 +7,83 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace OrdersManagement.Migrations
 {
     /// <inheritdoc />
-    public partial class ModelosDb : Migration
+    public partial class CreacionDefinitivaTablas : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_Equipo_Clientes_ClienteId",
-                table: "Equipo");
-
-            migrationBuilder.DropPrimaryKey(
-                name: "PK_Equipo",
-                table: "Equipo");
-
-            migrationBuilder.RenameTable(
-                name: "Equipo",
-                newName: "Equipos");
-
-            migrationBuilder.RenameIndex(
-                name: "IX_Equipo_ClienteId",
-                table: "Equipos",
-                newName: "IX_Equipos_ClienteId");
-
-            migrationBuilder.AddPrimaryKey(
-                name: "PK_Equipos",
-                table: "Equipos",
-                column: "EquipoId");
+            migrationBuilder.AlterDatabase()
+                .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Tecnicos",
+                name: "Clientes",
                 columns: table => new
                 {
-                    TecnicoId = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     Nombre = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    Especialidad = table.Column<string>(type: "longtext", nullable: false)
+                    Direccion = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    Telefono = table.Column<int>(type: "int", nullable: false)
+                    Telefono = table.Column<string>(type: "varchar(10)", maxLength: 10, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Tecnicos", x => x.TecnicoId);
+                    table.PrimaryKey("PK_Clientes", x => x.Id);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "Usuarios",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Fullname = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Correo = table.Column<string>(type: "varchar(255)", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Contraseña = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Rol = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Especialidad = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Telefono = table.Column<string>(type: "varchar(10)", maxLength: 10, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Usuarios", x => x.Id);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "Equipos",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Marca = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Modelo = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Serie = table.Column<string>(type: "varchar(255)", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    TipoEquipo = table.Column<string>(type: "longtext", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    ClienteId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Equipos", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Equipos_Clientes_ClienteId",
+                        column: x => x.ClienteId,
+                        principalTable: "Clientes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -56,7 +91,7 @@ namespace OrdersManagement.Migrations
                 name: "OrdenesServicio",
                 columns: table => new
                 {
-                    OrdenServicioId = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     FechaCreacion = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     FechaCierre = table.Column<DateTime>(type: "datetime(6)", nullable: false),
@@ -67,51 +102,23 @@ namespace OrdersManagement.Migrations
                     Prioridad = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Presupuesto = table.Column<decimal>(type: "decimal(65,30)", nullable: false),
-                    TecnicoId = table.Column<int>(type: "int", nullable: false),
+                    UsuarioId = table.Column<int>(type: "int", nullable: false),
                     EquipoId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OrdenesServicio", x => x.OrdenServicioId);
+                    table.PrimaryKey("PK_OrdenesServicio", x => x.Id);
                     table.ForeignKey(
                         name: "FK_OrdenesServicio_Equipos_EquipoId",
                         column: x => x.EquipoId,
                         principalTable: "Equipos",
-                        principalColumn: "EquipoId",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_OrdenesServicio_Tecnicos_TecnicoId",
-                        column: x => x.TecnicoId,
-                        principalTable: "Tecnicos",
-                        principalColumn: "TecnicoId",
-                        onDelete: ReferentialAction.Cascade);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.CreateTable(
-                name: "Usuarios",
-                columns: table => new
-                {
-                    UsuarioId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    Fullname = table.Column<string>(type: "longtext", nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    correo = table.Column<string>(type: "longtext", nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    Contraseña = table.Column<string>(type: "longtext", nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    Rol = table.Column<string>(type: "longtext", nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    TecnicoId = table.Column<int>(type: "int", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Usuarios", x => x.UsuarioId);
-                    table.ForeignKey(
-                        name: "FK_Usuarios_Tecnicos_TecnicoId",
-                        column: x => x.TecnicoId,
-                        principalTable: "Tecnicos",
-                        principalColumn: "TecnicoId",
+                        name: "FK_OrdenesServicio_Usuarios_UsuarioId",
+                        column: x => x.UsuarioId,
+                        principalTable: "Usuarios",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
@@ -120,7 +127,7 @@ namespace OrdersManagement.Migrations
                 name: "Diagnosticos",
                 columns: table => new
                 {
-                    DiagnosticoId = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     DiagnosticoFalla = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
@@ -130,12 +137,12 @@ namespace OrdersManagement.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Diagnosticos", x => x.DiagnosticoId);
+                    table.PrimaryKey("PK_Diagnosticos", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Diagnosticos_OrdenesServicio_OrdenServicioId",
                         column: x => x.OrdenServicioId,
                         principalTable: "OrdenesServicio",
-                        principalColumn: "OrdenServicioId",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
@@ -144,7 +151,7 @@ namespace OrdersManagement.Migrations
                 name: "Evidencias",
                 columns: table => new
                 {
-                    EvidenciaId = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     Descripcion = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
@@ -157,20 +164,36 @@ namespace OrdersManagement.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Evidencias", x => x.EvidenciaId);
+                    table.PrimaryKey("PK_Evidencias", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Evidencias_OrdenesServicio_OrdenServicioId",
                         column: x => x.OrdenServicioId,
                         principalTable: "OrdenesServicio",
-                        principalColumn: "OrdenServicioId",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Clientes_Telefono",
+                table: "Clientes",
+                column: "Telefono",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Diagnosticos_OrdenServicioId",
                 table: "Diagnosticos",
                 column: "OrdenServicioId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Equipos_ClienteId",
+                table: "Equipos",
+                column: "ClienteId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Equipos_Serie",
+                table: "Equipos",
+                column: "Serie");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Evidencias_OrdenServicioId",
@@ -183,31 +206,26 @@ namespace OrdersManagement.Migrations
                 column: "EquipoId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OrdenesServicio_TecnicoId",
+                name: "IX_OrdenesServicio_UsuarioId",
                 table: "OrdenesServicio",
-                column: "TecnicoId");
+                column: "UsuarioId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Usuarios_TecnicoId",
+                name: "IX_Usuarios_Correo",
                 table: "Usuarios",
-                column: "TecnicoId");
+                column: "Correo",
+                unique: true);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Equipos_Clientes_ClienteId",
-                table: "Equipos",
-                column: "ClienteId",
-                principalTable: "Clientes",
-                principalColumn: "ClienteId",
-                onDelete: ReferentialAction.Cascade);
+            migrationBuilder.CreateIndex(
+                name: "IX_Usuarios_Telefono",
+                table: "Usuarios",
+                column: "Telefono",
+                unique: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_Equipos_Clientes_ClienteId",
-                table: "Equipos");
-
             migrationBuilder.DropTable(
                 name: "Diagnosticos");
 
@@ -215,39 +233,16 @@ namespace OrdersManagement.Migrations
                 name: "Evidencias");
 
             migrationBuilder.DropTable(
-                name: "Usuarios");
-
-            migrationBuilder.DropTable(
                 name: "OrdenesServicio");
 
             migrationBuilder.DropTable(
-                name: "Tecnicos");
+                name: "Equipos");
 
-            migrationBuilder.DropPrimaryKey(
-                name: "PK_Equipos",
-                table: "Equipos");
+            migrationBuilder.DropTable(
+                name: "Usuarios");
 
-            migrationBuilder.RenameTable(
-                name: "Equipos",
-                newName: "Equipo");
-
-            migrationBuilder.RenameIndex(
-                name: "IX_Equipos_ClienteId",
-                table: "Equipo",
-                newName: "IX_Equipo_ClienteId");
-
-            migrationBuilder.AddPrimaryKey(
-                name: "PK_Equipo",
-                table: "Equipo",
-                column: "EquipoId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Equipo_Clientes_ClienteId",
-                table: "Equipo",
-                column: "ClienteId",
-                principalTable: "Clientes",
-                principalColumn: "ClienteId",
-                onDelete: ReferentialAction.Cascade);
+            migrationBuilder.DropTable(
+                name: "Clientes");
         }
     }
 }

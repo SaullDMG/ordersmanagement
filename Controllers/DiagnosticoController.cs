@@ -21,7 +21,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/diagnostico
-        // Listar todos los diagnósticos
         [HttpGet]
         public async Task<ActionResult<object>> GetDiagnosticos()
         {
@@ -32,25 +31,22 @@ namespace OrdersManagement.Controllers
                         .ThenInclude(o => o!.Equipo)
                     .Select(d => new
                     {
-                        d.DiagnosticoId,
+                        d.Id, // Modificado
                         d.DiagnosticoFalla,
                         d.CostoRep,
                         d.CostoRef,
                         d.OrdenServicioId,
-                        // Calcular costo total
                         CostoTotal = d.CostoRep + d.CostoRef,
-                        // Información de la orden de servicio sin referencias circulares
                         OrdenServicio = d.OrdenServicio != null ? new
                         {
-                            d.OrdenServicio.OrdenServicioId,
+                            d.OrdenServicio.Id, // Modificado
                             d.OrdenServicio.Falla,
                             d.OrdenServicio.Estado,
                             d.OrdenServicio.Prioridad,
                             d.OrdenServicio.FechaCreacion,
-                            // Información del equipo
                             Equipo = d.OrdenServicio.Equipo != null ? new
                             {
-                                d.OrdenServicio.Equipo.EquipoId,
+                                d.OrdenServicio.Equipo.Id, // Modificado
                                 d.OrdenServicio.Equipo.Marca,
                                 d.OrdenServicio.Equipo.Modelo,
                                 d.OrdenServicio.Equipo.Serie,
@@ -58,7 +54,7 @@ namespace OrdersManagement.Controllers
                             } : null
                         } : null
                     })
-                    .OrderByDescending(d => d.DiagnosticoId)
+                    .OrderByDescending(d => d.Id) // Modificado
                     .ToListAsync();
 
                 if (diagnosticos == null || diagnosticos.Count == 0)
@@ -66,7 +62,6 @@ namespace OrdersManagement.Controllers
                     return NotFound(new { mensaje = "No hay diagnósticos registrados" });
                 }
 
-                // Estadísticas generales
                 var estadisticas = new
                 {
                     TotalDiagnosticos = diagnosticos.Count,
@@ -92,7 +87,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/diagnostico/{id}
-        // Buscar diagnóstico por ID
         [HttpGet("{id}")]
         public async Task<ActionResult<object>> GetDiagnostico(int id)
         {
@@ -101,38 +95,35 @@ namespace OrdersManagement.Controllers
                 var diagnostico = await _db.Diagnosticos
                     .Include(d => d.OrdenServicio)
                         .ThenInclude(o => o!.Equipo)
-                    .Where(d => d.DiagnosticoId == id)
+                    .Where(d => d.Id == id) // Modificado
                     .Select(d => new
                     {
-                        d.DiagnosticoId,
+                        d.Id, // Modificado
                         d.DiagnosticoFalla,
                         d.CostoRep,
                         d.CostoRef,
                         d.OrdenServicioId,
                         CostoTotal = d.CostoRep + d.CostoRef,
-                        // Información de la orden de servicio sin referencias circulares
                         OrdenServicio = d.OrdenServicio != null ? new
                         {
-                            d.OrdenServicio.OrdenServicioId,
+                            d.OrdenServicio.Id, // Modificado
                             d.OrdenServicio.Falla,
                             d.OrdenServicio.Estado,
                             d.OrdenServicio.Prioridad,
                             d.OrdenServicio.Presupuesto,
                             d.OrdenServicio.FechaCreacion,
                             d.OrdenServicio.FechaCierre,
-                            // Información del equipo
                             Equipo = d.OrdenServicio.Equipo != null ? new
                             {
-                                d.OrdenServicio.Equipo.EquipoId,
+                                d.OrdenServicio.Equipo.Id, // Modificado
                                 d.OrdenServicio.Equipo.Marca,
                                 d.OrdenServicio.Equipo.Modelo,
                                 d.OrdenServicio.Equipo.Serie,
                                 d.OrdenServicio.Equipo.TipoEquipo
                             } : null,
-                            // Información del cliente
                             Cliente = d.OrdenServicio.Equipo != null && d.OrdenServicio.Equipo.Cliente != null ? new
                             {
-                                d.OrdenServicio.Equipo.Cliente.ClienteId,
+                                d.OrdenServicio.Equipo.Cliente.Id, // Modificado
                                 d.OrdenServicio.Equipo.Cliente.Nombre,
                                 d.OrdenServicio.Equipo.Cliente.Telefono
                             } : null
@@ -158,15 +149,13 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/diagnostico/orden/{ordenServicioId}
-        // Listar diagnósticos por orden de servicio
         [HttpGet("orden/{ordenServicioId}")]
         public async Task<ActionResult<object>> GetDiagnosticosPorOrden(int ordenServicioId)
         {
             try
             {
-                // Verificar si la orden de servicio existe
                 var ordenExiste = await _db.OrdenesServicio
-                    .AnyAsync(o => o.OrdenServicioId == ordenServicioId);
+                    .AnyAsync(o => o.Id == ordenServicioId); // Modificado
 
                 if (!ordenExiste)
                 {
@@ -177,14 +166,14 @@ namespace OrdersManagement.Controllers
                     .Where(d => d.OrdenServicioId == ordenServicioId)
                     .Select(d => new
                     {
-                        d.DiagnosticoId,
+                        d.Id, // Modificado
                         d.DiagnosticoFalla,
                         d.CostoRep,
                         d.CostoRef,
                         d.OrdenServicioId,
                         CostoTotal = d.CostoRep + d.CostoRef
                     })
-                    .OrderByDescending(d => d.DiagnosticoId)
+                    .OrderByDescending(d => d.Id) // Modificado
                     .ToListAsync();
 
                 if (diagnosticos == null || diagnosticos.Count == 0)
@@ -208,7 +197,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/diagnostico/rango-costos
-        // Listar diagnósticos por rango de costos
         [HttpGet("rango-costos")]
         public async Task<ActionResult<object>> GetDiagnosticosPorRangoCostos(
             [FromQuery] decimal? costoMin,
@@ -233,7 +221,7 @@ namespace OrdersManagement.Controllers
                 var diagnosticos = await query
                     .Select(d => new
                     {
-                        d.DiagnosticoId,
+                        d.Id, // Modificado
                         d.DiagnosticoFalla,
                         d.CostoRep,
                         d.CostoRef,
@@ -241,7 +229,7 @@ namespace OrdersManagement.Controllers
                         CostoTotal = d.CostoRep + d.CostoRef,
                         OrdenServicio = d.OrdenServicio != null ? new
                         {
-                            d.OrdenServicio.OrdenServicioId,
+                            d.OrdenServicio.Id, // Modificado
                             d.OrdenServicio.Estado
                         } : null
                     })
@@ -271,13 +259,11 @@ namespace OrdersManagement.Controllers
         }
 
         // POST: api/diagnostico
-        // Crear nuevo diagnóstico
         [HttpPost]
         public async Task<ActionResult<object>> CreateDiagnostico([FromBody] Diagnostico diagnostico)
         {
             try
             {
-                // Validar modelo
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(new
@@ -289,24 +275,21 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Validar que la orden de servicio exista
                 var ordenServicio = await _db.OrdenesServicio
                     .Include(o => o.Equipo)
                         .ThenInclude(e => e!.Cliente)
-                    .FirstOrDefaultAsync(o => o.OrdenServicioId == diagnostico.OrdenServicioId);
+                    .FirstOrDefaultAsync(o => o.Id == diagnostico.OrdenServicioId); // Modificado
 
                 if (ordenServicio == null)
                 {
                     return BadRequest(new { mensaje = $"La orden de servicio con ID {diagnostico.OrdenServicioId} no existe" });
                 }
 
-                // Validar que la orden no esté finalizada
                 if (ordenServicio.Estado == "Finalizada")
                 {
                     return BadRequest(new { mensaje = "No se puede agregar un diagnóstico a una orden finalizada" });
                 }
 
-                // Calcular el nuevo costo total incluyendo el diagnóstico actual
                 var diagnosticosExistentes = await _db.Diagnosticos
                     .Where(d => d.OrdenServicioId == diagnostico.OrdenServicioId)
                     .ToListAsync();
@@ -314,20 +297,17 @@ namespace OrdersManagement.Controllers
                 var costoTotalActual = diagnosticosExistentes.Sum(d => d.CostoRep + d.CostoRef);
                 var nuevoCostoTotal = costoTotalActual + diagnostico.CostoRep + diagnostico.CostoRef;
                 
-                // Verificar si supera el presupuesto
                 bool superaPresupuesto = nuevoCostoTotal > ordenServicio.Presupuesto;
 
-                // Agregar diagnóstico
                 await _db.Diagnosticos.AddAsync(diagnostico);
                 await _db.SaveChangesAsync();
 
-                // 🔥 ENVIAR ALERTA WEBSOCKET si supera el presupuesto
                 if (superaPresupuesto)
                 {
                     var mensajeAlerta = new
                     {
                         tipo = "presupuesto_excedido",
-                        ordenServicioId = ordenServicio.OrdenServicioId,
+                        ordenServicioId = ordenServicio.Id, // Modificado
                         clienteNombre = ordenServicio.Equipo?.Cliente?.Nombre ?? "Cliente no especificado",
                         equipoDescripcion = $"{ordenServicio.Equipo?.Marca} {ordenServicio.Equipo?.Modelo} - {ordenServicio.Equipo?.Serie}",
                         presupuesto = ordenServicio.Presupuesto,
@@ -337,14 +317,13 @@ namespace OrdersManagement.Controllers
                         diagnosticos = new
                         {
                             existentes = diagnosticosExistentes.Count,
-                            nuevo = new { diagnostico.DiagnosticoId, diagnostico.DiagnosticoFalla, costo = diagnostico.CostoRep + diagnostico.CostoRef }
+                            nuevo = new { diagnostico.Id, diagnostico.DiagnosticoFalla, costo = diagnostico.CostoRep + diagnostico.CostoRef } // Modificado
                         }
                     };
 
                     await _webSocketService.SendAlertToClientsAsync(JsonSerializer.Serialize(mensajeAlerta));
                 }
 
-                // Respuesta exitosa
                 return Ok(new
                 {
                     mensaje = superaPresupuesto 
@@ -357,7 +336,7 @@ namespace OrdersManagement.Controllers
                     diferencia = nuevoCostoTotal - ordenServicio.Presupuesto,
                     diagnostico = new
                     {
-                        diagnostico.DiagnosticoId,
+                        diagnostico.Id, // Modificado
                         diagnostico.DiagnosticoFalla,
                         diagnostico.CostoRep,
                         diagnostico.CostoRef,
@@ -372,41 +351,31 @@ namespace OrdersManagement.Controllers
         }
 
         // PUT: api/diagnostico/{id}
-        // Editar diagnóstico completo
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateDiagnostico(int id, [FromBody] Diagnostico diagnostico)
         {
             try
             {
-                // Validar que el ID coincida
-                if (id != diagnostico.DiagnosticoId)
-                {
-                    return BadRequest(new { mensaje = "El ID de la URL no coincide con el ID del diagnóstico" });
-                }
-
-                // Buscar el diagnóstico existente
                 var diagnosticoExistente = await _db.Diagnosticos
-                    .FirstOrDefaultAsync(d => d.DiagnosticoId == id);
+                    .FirstOrDefaultAsync(d => d.Id == id); // Modificado
 
                 if (diagnosticoExistente == null)
                 {
                     return NotFound(new { mensaje = $"Diagnóstico con ID {id} no encontrado" });
                 }
 
-                // Obtener la orden de servicio
                 var ordenServicio = await _db.OrdenesServicio
                     .Include(o => o.Equipo)
                         .ThenInclude(e => e.Cliente)
-                    .FirstOrDefaultAsync(o => o.OrdenServicioId == diagnostico.OrdenServicioId);
+                    .FirstOrDefaultAsync(o => o.Id == diagnostico.OrdenServicioId); // Modificado
 
                 if (ordenServicio == null)
                 {
                     return BadRequest(new { mensaje = $"La orden de servicio con ID {diagnostico.OrdenServicioId} no existe" });
                 }
 
-                // Calcular costo total (excluyendo el diagnóstico actual, luego sumando el nuevo)
                 var otrosDiagnosticos = await _db.Diagnosticos
-                    .Where(d => d.OrdenServicioId == diagnostico.OrdenServicioId && d.DiagnosticoId != id)
+                    .Where(d => d.OrdenServicioId == diagnostico.OrdenServicioId && d.Id != id) // Modificado
                     .ToListAsync();
                 
                 var costoOtros = otrosDiagnosticos.Sum(d => d.CostoRep + d.CostoRef);
@@ -414,18 +383,15 @@ namespace OrdersManagement.Controllers
                 
                 bool superaPresupuesto = nuevoCostoTotal > ordenServicio.Presupuesto;
 
-                // Guardar valores anteriores para comparación
                 var costoAnterior = diagnosticoExistente.CostoRep + diagnosticoExistente.CostoRef;
                 var costoAnteriorTotal = costoOtros + costoAnterior;
 
-                // Actualizar diagnóstico
                 diagnosticoExistente.DiagnosticoFalla = diagnostico.DiagnosticoFalla;
                 diagnosticoExistente.CostoRep = diagnostico.CostoRep;
                 diagnosticoExistente.CostoRef = diagnostico.CostoRef;
 
                 await _db.SaveChangesAsync();
 
-                // 🔥 ENVIAR ALERTA si el presupuesto se superó o empeoró la situación
                 bool empeoroSituacion = superaPresupuesto && !(costoAnteriorTotal > ordenServicio.Presupuesto);
 
                 if (superaPresupuesto)
@@ -433,7 +399,7 @@ namespace OrdersManagement.Controllers
                     var mensajeAlerta = new
                     {
                         tipo = "presupuesto_excedido_actualizado",
-                        ordenServicioId = ordenServicio.OrdenServicioId,
+                        ordenServicioId = ordenServicio.Id, // Modificado
                         clienteNombre = ordenServicio.Equipo?.Cliente?.Nombre ?? "Cliente no especificado",
                         equipoDescripcion = $"{ordenServicio.Equipo?.Marca} {ordenServicio.Equipo?.Modelo}",
                         presupuesto = ordenServicio.Presupuesto,
@@ -466,7 +432,6 @@ namespace OrdersManagement.Controllers
         }
 
         // PATCH: api/diagnostico/{id}
-        // Editar diagnóstico parcialmente
         [HttpPatch("{id}")]
         public async Task<IActionResult> PatchDiagnostico(int id, [FromBody] JsonElement updates)
         {
@@ -474,20 +439,18 @@ namespace OrdersManagement.Controllers
             {
                 var diagnostico = await _db.Diagnosticos
                     .Include(d => d.OrdenServicio)
-                    .FirstOrDefaultAsync(d => d.DiagnosticoId == id);
+                    .FirstOrDefaultAsync(d => d.Id == id); // Modificado
 
                 if (diagnostico == null)
                 {
                     return NotFound(new { mensaje = $"Diagnóstico con ID {id} no encontrado" });
                 }
 
-                // Verificar si la orden está finalizada
                 if (diagnostico.OrdenServicio?.Estado == "Finalizada")
                 {
                     return BadRequest(new { mensaje = "No se puede modificar un diagnóstico de una orden finalizada" });
                 }
 
-                // Aplicar actualizaciones solo a los campos enviados
                 if (updates.TryGetProperty("DiagnosticoFalla", out var fallaProp))
                 {
                     diagnostico.DiagnosticoFalla = fallaProp.GetString();
@@ -517,7 +480,7 @@ namespace OrdersManagement.Controllers
                 {
                     var nuevaOrdenId = ordenIdProp.GetInt32();
                     var ordenExiste = await _db.OrdenesServicio
-                        .FirstOrDefaultAsync(o => o.OrdenServicioId == nuevaOrdenId);
+                        .FirstOrDefaultAsync(o => o.Id == nuevaOrdenId); // Modificado
 
                     if (ordenExiste == null)
                     {
@@ -536,7 +499,7 @@ namespace OrdersManagement.Controllers
 
                 var diagnosticoActualizado = new
                 {
-                    diagnostico.DiagnosticoId,
+                    diagnostico.Id, // Modificado
                     diagnostico.DiagnosticoFalla,
                     diagnostico.CostoRep,
                     diagnostico.CostoRef,
@@ -557,16 +520,14 @@ namespace OrdersManagement.Controllers
         }
 
         // DELETE: api/diagnostico/{id}
-        // Eliminar diagnóstico
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteDiagnostico(int id)
         {
             try
             {
-                // Buscar el diagnóstico
                 var diagnostico = await _db.Diagnosticos
                     .Include(d => d.OrdenServicio)
-                    .FirstOrDefaultAsync(d => d.DiagnosticoId == id);
+                    .FirstOrDefaultAsync(d => d.Id == id); // Modificado
 
                 if (diagnostico == null)
                 {
@@ -577,7 +538,6 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Verificar si la orden está finalizada
                 if (diagnostico.OrdenServicio?.Estado == "Finalizada")
                 {
                     return BadRequest(new
@@ -588,10 +548,9 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Guardar información para la respuesta
                 var diagnosticoInfo = new
                 {
-                    diagnostico.DiagnosticoId,
+                    diagnostico.Id, // Modificado
                     diagnostico.DiagnosticoFalla,
                     diagnostico.CostoRep,
                     diagnostico.CostoRef,
@@ -599,12 +558,11 @@ namespace OrdersManagement.Controllers
                     CostoTotal = diagnostico.CostoRep + diagnostico.CostoRef,
                     OrdenInfo = diagnostico.OrdenServicio != null ? new
                     {
-                        diagnostico.OrdenServicio.OrdenServicioId,
+                        diagnostico.OrdenServicio.Id, // Modificado
                         diagnostico.OrdenServicio.Estado
                     } : null
                 };
 
-                // Eliminar el diagnóstico
                 _db.Diagnosticos.Remove(diagnostico);
                 await _db.SaveChangesAsync();
 
@@ -617,50 +575,33 @@ namespace OrdersManagement.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                return StatusCode(409, new
-                {
-                    mensaje = "Error de concurrencia. El diagnóstico fue modificado por otro usuario",
-                    diagnosticoId = id
-                });
+                return StatusCode(409, new { mensaje = "Error de concurrencia. El diagnóstico fue modificado por otro usuario", diagnosticoId = id });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    mensaje = "Error interno del servidor al eliminar el diagnóstico",
-                    error = ex.Message,
-                    diagnosticoId = id
-                });
+                return StatusCode(500, new { mensaje = "Error interno del servidor al eliminar el diagnóstico", error = ex.Message, diagnosticoId = id });
             }
         }
 
         // DELETE: api/diagnostico/orden/{ordenServicioId}
-        // Eliminar todos los diagnósticos de una orden de servicio
         [HttpDelete("orden/{ordenServicioId}")]
         public async Task<IActionResult> DeleteDiagnosticosPorOrden(int ordenServicioId)
         {
             try
             {
-                // Verificar si la orden existe
                 var ordenServicio = await _db.OrdenesServicio
-                    .FirstOrDefaultAsync(o => o.OrdenServicioId == ordenServicioId);
+                    .FirstOrDefaultAsync(o => o.Id == ordenServicioId); // Modificado
 
                 if (ordenServicio == null)
                 {
                     return NotFound(new { mensaje = $"Orden de servicio con ID {ordenServicioId} no encontrada" });
                 }
 
-                // Verificar si la orden está finalizada
                 if (ordenServicio.Estado == "Finalizada")
                 {
-                    return BadRequest(new
-                    {
-                        mensaje = "No se pueden eliminar diagnósticos de una orden finalizada",
-                        ordenServicioId = ordenServicioId
-                    });
+                    return BadRequest(new { mensaje = "No se pueden eliminar diagnósticos de una orden finalizada", ordenServicioId = ordenServicioId });
                 }
 
-                // Obtener los diagnósticos a eliminar
                 var diagnosticos = await _db.Diagnosticos
                     .Where(d => d.OrdenServicioId == ordenServicioId)
                     .ToListAsync();
@@ -671,7 +612,7 @@ namespace OrdersManagement.Controllers
                 }
 
                 var cantidadEliminados = diagnosticos.Count;
-                var idsEliminados = diagnosticos.Select(d => d.DiagnosticoId).ToList();
+                var idsEliminados = diagnosticos.Select(d => d.Id).ToList(); // Modificado
                 var costoTotalEliminado = diagnosticos.Sum(d => d.CostoRep + d.CostoRef);
 
                 _db.Diagnosticos.RemoveRange(diagnosticos);
@@ -689,19 +630,13 @@ namespace OrdersManagement.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    mensaje = "Error al eliminar los diagnósticos de la orden",
-                    error = ex.Message,
-                    ordenServicioId = ordenServicioId
-                });
+                return StatusCode(500, new { mensaje = "Error al eliminar los diagnósticos de la orden", error = ex.Message, ordenServicioId = ordenServicioId });
             }
         }
 
         // GET: api/diagnostico/resumen-costos
-        // Resumen de costos por diagnóstico
         [HttpGet("resumen-costos")]
-        public async Task<ActionResult<object>> GetResumenCostos()
+        public async Task<ActionResult<object>> GetResumenCosts()
         {
             try
             {

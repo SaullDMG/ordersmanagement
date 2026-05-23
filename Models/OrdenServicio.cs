@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using ordersmanagement.Models;
 
 namespace OrdersManagement.Models
 {
@@ -13,37 +13,56 @@ namespace OrdersManagement.Models
             var mexicoZone = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time (Mexico)");
             FechaCreacion = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, mexicoZone);
         }
-    public int OrdenServicioId { get; set; }
 
-    [Required(ErrorMessage = "La fecha de creación es requerida")]
-    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
-    public DateTime FechaCierre { get; set; }
+        public int Id { get; set; } 
 
-    [Required(ErrorMessage = "La Descripción de la falla es requerida")]
-    public string? Falla { get; set; }
+        [Required(ErrorMessage = "La fecha de creación es requerida")]
+        public DateTime FechaCreacion { get; set; }
+        public DateTime? FechaCierre { get; set; } // nulleable si arranca en "Pendiente"
+        public DateTime? FechaInicio { get; set; } // nulleable si arranca en "Pendiente"
 
-    [Required(ErrorMessage = "El estado es requerido")]
-    [RegularExpression("Pendiente|Finalizada", ErrorMessage = "La especialidad debe ser 'Pendiente' o 'Finalizada'")]
-    public string? Estado { get; set; }
+        [Required(ErrorMessage = "La Descripción de la falla es requerida")]
+        public string? Falla { get; set; }
 
-    [Required(ErrorMessage = "La prioridad es requerida")]
-    [RegularExpression("Alta|Media|Baja", ErrorMessage = "La prioridad debe ser 'Alta', 'Media' o 'Baja'")]
-    public string? Prioridad { get; set; }
+        [Required(ErrorMessage = "El estado es requerido")]
+        [RegularExpression("Pendiente|Procesando|Cancelado|Finalizada", ErrorMessage = "El estado debe ser 'Pendiente' o 'Procesando' o 'Cancelado' o 'Finalizada'")]
+        public string? Estado { get; set; }
 
-    [Required(ErrorMessage = "El presupuesto es requerido")]
-    public decimal Presupuesto { get; set; }
+        [Required(ErrorMessage = "La prioridad es requerida")]
+        [RegularExpression("Alta|Media|Baja", ErrorMessage = "La prioridad debe ser 'Alta', 'Media' o 'Baja'")]
+        public string? Prioridad { get; set; }
 
-    //Propiedad para definir la llave foranea
-    public int UsuarioId { get; set; }
-    public int EquipoId { get; set; }
+        [Required(ErrorMessage = "El presupuesto es requerido")]
+        [Column(TypeName = "decimal(18, 2)")] // Configuración explícita para SQL Server
+        public decimal Presupuesto { get; set; }
 
-    //Propiedad de navegación para los modelos Tecnico y Equipo
-    public Usuario? Usuario { get; set; }   
-    public Equipo? Equipo { get; set; }
+        // =========================================================
+        // LLAVES FORÁNEAS Y LLAVES DE CONTROL HISTÓRICO
+        // =========================================================
+        
+        [Required(ErrorMessage = "La sucursal es obligatoria para congelar la ubicación del servicio")]
+        public int SucursalId { get; set; } // <-- Amarre histórico de ubicación
 
-    //Propuedad de navegación para establecer la relación con Diagnóstico y Evidencia
-    public virtual HashSet<Diagnostico>? Diagnosticos { get; set; } 
-    public virtual HashSet<Evidencia>? Evidencias { get; set; }
+        [Required(ErrorMessage = "El equipo es requerido")]
+        public int EquipoId { get; set; }
 
+        [Required(ErrorMessage = "El técnico asignado es requerido")]
+        public int UsuarioId { get; set; }
+
+        // =========================================================
+        // PROPIEDADES DE NAVEGACIÓN (VIRTUALES)
+        // =========================================================
+        
+        [ForeignKey("SucursalId")]
+        public virtual Sucursal? Sucursal { get; set; }
+
+        [ForeignKey("EquipoId")]
+        public virtual Equipo? Equipo { get; set; }
+
+        [ForeignKey("UsuarioId")]
+        public virtual Usuario? Usuario { get; set; }   
+
+        public virtual ICollection<Diagnostico> Diagnosticos { get; set; } = new HashSet<Diagnostico>();
+        public virtual ICollection<Evidencia> Evidencias { get; set; } = new HashSet<Evidencia>();
     }
 }

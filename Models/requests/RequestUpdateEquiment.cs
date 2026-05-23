@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace OrdersManagement.Models
+namespace ordersmanagement.Models.requests
 {
-    public class Equipo
+    public class RequestUpdateEquiment
     {
-        public int Id { get; set; } // Cambiado de EquipoId a Id
 
         [Required(ErrorMessage = "La marca es requerida")]
         public string? Marca { get; set; }
@@ -20,11 +21,5 @@ namespace OrdersManagement.Models
         [Required(ErrorMessage = "El tipo de equipo es requerido")]
         [RegularExpression("Impresion|Computo", ErrorMessage = "El tipo debe ser 'Impresion' o 'Computo'")]
         public string? TipoEquipo { get; set; }
-
-        // La llave foránea se sigue llamando ClienteId porque apunta a la entidad Cliente
-        public int ClienteId { get; set; }
-        public Cliente? Cliente { get; set; }
-
-        public virtual HashSet<OrdenServicio>? OrdenesServicio { get; set; }
     }
 }

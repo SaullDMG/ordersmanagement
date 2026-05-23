@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace OrdersManagement.Models
+namespace ordersmanagement.Models.requests
 {
-    public class Usuario
+    public class RequestUpdateUser
     {
-        public int Id { get; set; } // Cambiado de UsuarioId a Id
-
         [Required(ErrorMessage = "Se requiere el nombre completo del usuario")]
         public string? Fullname { get; set; }
 
@@ -15,12 +15,8 @@ namespace OrdersManagement.Models
         [EmailAddress(ErrorMessage = "Formato de correo inválido")]
         public string? Correo { get; set; }
 
-        [Required(ErrorMessage = "La contraseña es requerida")]
-        [StringLength(100, MinimumLength = 3, ErrorMessage = "Mínimo 8 caracteres")]
-        // [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$",
-        // ErrorMessage = "Debe contener mayúscula, minúscula, número y carácter especial")]
         [DataType(DataType.Password)]
-        public string Contraseña { get; set; } = string.Empty;
+        public string? Contraseña { get; set; } 
 
         [Required(ErrorMessage = "El rol del usuario es requerido")]
         [RegularExpression("Admin|Tecnico", ErrorMessage = "El rol debe ser 'Admin' o 'Tecnico'")]
@@ -33,7 +29,5 @@ namespace OrdersManagement.Models
         [Required(ErrorMessage = "El teléfono es requerido")]
         [StringLength(10, ErrorMessage = "El teléfono debe tener 10 dígitos")]
         public string? Telefono { get; set; }
-
-        public virtual HashSet<OrdenServicio>? OrdenesServicio { get; set; }
     }
 }

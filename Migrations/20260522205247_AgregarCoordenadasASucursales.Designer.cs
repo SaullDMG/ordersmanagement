@@ -12,8 +12,8 @@ using OrdersManagement.Data;
 namespace OrdersManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260520035602_ModelUsuario")]
-    partial class ModelUsuario
+    [Migration("20260522205247_AgregarCoordenadasASucursales")]
+    partial class AgregarCoordenadasASucursales
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -27,11 +27,11 @@ namespace OrdersManagement.Migrations
 
             modelBuilder.Entity("OrdersManagement.Models.Cliente", b =>
                 {
-                    b.Property<int>("ClienteId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("ClienteId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Direccion")
                         .IsRequired()
@@ -46,18 +46,21 @@ namespace OrdersManagement.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("varchar(10)");
 
-                    b.HasKey("ClienteId");
+                    b.HasKey("Id");
+
+                    b.HasIndex("Telefono")
+                        .IsUnique();
 
                     b.ToTable("Clientes");
                 });
 
             modelBuilder.Entity("OrdersManagement.Models.Diagnostico", b =>
                 {
-                    b.Property<int>("DiagnosticoId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("DiagnosticoId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("CostoRef")
                         .HasColumnType("decimal(65,30)");
@@ -72,7 +75,7 @@ namespace OrdersManagement.Migrations
                     b.Property<int>("OrdenServicioId")
                         .HasColumnType("int");
 
-                    b.HasKey("DiagnosticoId");
+                    b.HasKey("Id");
 
                     b.HasIndex("OrdenServicioId");
 
@@ -81,11 +84,11 @@ namespace OrdersManagement.Migrations
 
             modelBuilder.Entity("OrdersManagement.Models.Equipo", b =>
                 {
-                    b.Property<int>("EquipoId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("EquipoId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("ClienteId")
                         .HasColumnType("int");
@@ -100,26 +103,28 @@ namespace OrdersManagement.Migrations
 
                     b.Property<string>("Serie")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("TipoEquipo")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.HasKey("EquipoId");
+                    b.HasKey("Id");
 
                     b.HasIndex("ClienteId");
+
+                    b.HasIndex("Serie");
 
                     b.ToTable("Equipos");
                 });
 
             modelBuilder.Entity("OrdersManagement.Models.Evidencia", b =>
                 {
-                    b.Property<int>("EvidenciaId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("EvidenciaId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Descripcion")
                         .IsRequired()
@@ -140,7 +145,7 @@ namespace OrdersManagement.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.HasKey("EvidenciaId");
+                    b.HasKey("Id");
 
                     b.HasIndex("OrdenServicioId");
 
@@ -149,11 +154,11 @@ namespace OrdersManagement.Migrations
 
             modelBuilder.Entity("OrdersManagement.Models.OrdenServicio", b =>
                 {
-                    b.Property<int>("OrdenServicioId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("OrdenServicioId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("EquipoId")
                         .HasColumnType("int");
@@ -182,7 +187,7 @@ namespace OrdersManagement.Migrations
                     b.Property<int>("UsuarioId")
                         .HasColumnType("int");
 
-                    b.HasKey("OrdenServicioId");
+                    b.HasKey("Id");
 
                     b.HasIndex("EquipoId");
 
@@ -193,11 +198,11 @@ namespace OrdersManagement.Migrations
 
             modelBuilder.Entity("OrdersManagement.Models.Usuario", b =>
                 {
-                    b.Property<int>("UsuarioId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("UsuarioId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Contraseña")
                         .IsRequired()
@@ -206,7 +211,7 @@ namespace OrdersManagement.Migrations
 
                     b.Property<string>("Correo")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("Especialidad")
                         .IsRequired()
@@ -225,9 +230,52 @@ namespace OrdersManagement.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("varchar(10)");
 
-                    b.HasKey("UsuarioId");
+                    b.HasKey("Id");
+
+                    b.HasIndex("Correo")
+                        .IsUnique();
+
+                    b.HasIndex("Telefono")
+                        .IsUnique();
 
                     b.ToTable("Usuarios");
+                });
+
+            modelBuilder.Entity("ordersmanagement.Models.Sucursal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClienteId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Direccion")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<decimal?>("Latitud")
+                        .HasColumnType("decimal(9, 6)");
+
+                    b.Property<decimal?>("Longitud")
+                        .HasColumnType("decimal(10, 6)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Telefono")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClienteId");
+
+                    b.ToTable("Sucursales");
                 });
 
             modelBuilder.Entity("OrdersManagement.Models.Diagnostico", b =>
@@ -282,9 +330,22 @@ namespace OrdersManagement.Migrations
                     b.Navigation("Usuario");
                 });
 
+            modelBuilder.Entity("ordersmanagement.Models.Sucursal", b =>
+                {
+                    b.HasOne("OrdersManagement.Models.Cliente", "Cliente")
+                        .WithMany("Sucursales")
+                        .HasForeignKey("ClienteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Cliente");
+                });
+
             modelBuilder.Entity("OrdersManagement.Models.Cliente", b =>
                 {
                     b.Navigation("Equipos");
+
+                    b.Navigation("Sucursales");
                 });
 
             modelBuilder.Entity("OrdersManagement.Models.Equipo", b =>

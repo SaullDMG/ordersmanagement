@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ordersmanagement.Models.requests;
 using OrdersManagement.Data;
 using OrdersManagement.Models;
 using System.Text.Json;
@@ -18,56 +19,64 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/equipo
-        // Listar todos los equipos
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Equipo>>> GetEquipos()
+        public async Task<ActionResult<IEnumerable<Equipo>>> GetEquipos([FromQuery] string? clienteId)
         {
             try
             {
-                var equipos = await _db.Equipos
-                    .Include(e => e.Cliente)           // Incluir cliente relacionado
-                    .Include(e => e.OrdenesServicio)    // Incluir órdenes de servicio
-                    .ToListAsync();
+                // 1. Creamos la consulta base como IQueryable (Aún no va a la BD)
+                var query = _db.Equipos
+                    .Include(c => c.Cliente)
+                    .Include(e => e.OrdenesServicio)
+                    .AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(clienteId))
+                {
+                    query = query.Where(x => x.ClienteId == int.Parse(clienteId));
+                }
+
+                var equipos = await query.ToListAsync();
                 
                 if (equipos == null || equipos.Count == 0)
                 {
-                    return NotFound(new { mensaje = "No hay equipos registrados" });
+                    return Ok(Array.Empty<Equipo>());
                 }
-                //retornar la lista sin referencia circular
-                            var equiposSinCiclos = equipos.Select(e => new
+
+                var equiposSinCiclos = equipos.Select(e => new
+                {
+                    e.Id, // Modificado
+                    e.Marca,
+                    e.Modelo,
+                    e.Serie,
+                    e.TipoEquipo,
+                    e.ClienteId,
+                    nombreCliente =  e.Cliente  != null ? e.Cliente.Nombre:null,
+                    Cliente = e.Cliente != null ? new
                     {
-                        e.EquipoId,
-                        e.Marca,
-                        e.Modelo,
-                        e.Serie,
-                        e.TipoEquipo,
-                        e.ClienteId,
-                        Cliente = e.Cliente != null ? new
-                        {
-                            e.Cliente.ClienteId,
-                            e.Cliente.Nombre,
-                            e.Cliente.Direccion,
-                            e.Cliente.Telefono
-                            // No incluir Equipos aquí para evitar el ciclo
-                        } : null,
-                        OrdenesServicio = e.OrdenesServicio != null ? e.OrdenesServicio.Select(o => new
-                        {
-                            o.OrdenServicioId,
-                            o.Falla,
-                            o.FechaCreacion,
-                            o.Estado,
-                            o.Prioridad,
-                            o.Presupuesto
-                            
-                        }) : null
-                    });
-                
-                return Ok(new 
-                { 
-                    mensaje = "Equipos obtenidos exitosamente",
-                    total = equipos.Count,
-                    equipos = equiposSinCiclos 
+                        e.Cliente.Id, // Modificado
+                        e.Cliente.Nombre,
+                        e.Cliente.Direccion,
+                        e.Cliente.Telefono
+                    } : null,
+                    OrdenesServicio = e.OrdenesServicio != null ? e.OrdenesServicio.Select(o => new
+                    {
+                        o.Id, // Modificado
+                        o.Falla,
+                        o.FechaCreacion,
+                        o.Estado,
+                        o.Prioridad,
+                        o.Presupuesto
+                    }) : null
                 });
+                
+                // return Ok(new 
+                // { 
+                //     mensaje = "Equipos obtenidos exitosamente",
+                //     total = equipos.Count,
+                //     equipos = equiposSinCiclos 
+                // });
+                return Ok(equiposSinCiclos);
+
             }
             catch (Exception ex)
             {
@@ -76,7 +85,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/equipo/{id}
-        // Buscar equipo por ID
         [HttpGet("{id}")]
         public async Task<ActionResult<Equipo>> GetEquipo(int id)
         {
@@ -85,44 +93,40 @@ namespace OrdersManagement.Controllers
                 var equipo = await _db.Equipos
                     .Include(e => e.Cliente)
                     .Include(e => e.OrdenesServicio)
-                    .FirstOrDefaultAsync(e => e.EquipoId == id);
+                    .FirstOrDefaultAsync(e => e.Id == id); // Modificado
                 
                 if (equipo == null)
                 {
                     return NotFound(new { mensaje = $"Equipo con ID {id} no encontrado" });
                 }
-                //Evita la referencia circular al retornar el equipo
-                    var equipoSinCiclo = new
+
+                var equipoSinCiclo = new
+                {
+                    equipo.Id, // Modificado
+                    equipo.Marca,
+                    equipo.Modelo,
+                    equipo.Serie,
+                    equipo.TipoEquipo,
+                    equipo.ClienteId,
+                    Cliente = equipo.Cliente != null ? new
                     {
-                        equipo.EquipoId,
-                        equipo.Marca,
-                        equipo.Modelo,
-                        equipo.Serie,
-                        equipo.TipoEquipo,
-                        equipo.ClienteId,
-                    
-                        Cliente = equipo.Cliente != null ? new
+                        equipo.Cliente.Id, // Modificado
+                        equipo.Cliente.Nombre,
+                        equipo.Cliente.Direccion,
+                        equipo.Cliente.Telefono
+                    } : null,
+                    OrdenesServicio = equipo.OrdenesServicio != null && equipo.OrdenesServicio.Any() 
+                        ? equipo.OrdenesServicio.Select(o => new
                         {
-                            equipo.Cliente.ClienteId,
-                            equipo.Cliente.Nombre,
-                            equipo.Cliente.Direccion,
-                            equipo.Cliente.Telefono
-                            
-                        } : null,
-                        // Información de órdenes de servicio (sin incluir referencias circulares)
-                        OrdenesServicio = equipo.OrdenesServicio != null && equipo.OrdenesServicio.Any() 
-                            ? equipo.OrdenesServicio.Select(o => new
-                            {
-                                o.OrdenServicioId,
-                                o.Falla,
-                                o.FechaCreacion,
-                                o.Estado,
-                                o.Prioridad,
-                                o.Presupuesto
-                                // No incluir referencias al equipo aquí
-                            }).ToList()
-                            : null
-                    };
+                            o.Id, // Modificado
+                            o.Falla,
+                            o.FechaCreacion,
+                            o.Estado,
+                            o.Prioridad,
+                            o.Presupuesto
+                        }).ToList()
+                        : null
+                };
                 
                 return Ok(new 
                 { 
@@ -137,22 +141,19 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/equipo/cliente/{clienteId}
-        // Listar equipos por cliente
         [HttpGet("cliente/{clienteId}")]
         public async Task<ActionResult<object>> GetEquiposPorCliente(int clienteId)
         {
             try
             {
-                // Verificar si el cliente existe
                 var cliente = await _db.Clientes
-                    .Where(c => c.ClienteId == clienteId)
+                    .Where(c => c.Id == clienteId) // Modificado
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Direccion,
                         c.Telefono
-                        // No incluir Equipos aquí para evitar el ciclo
                     })
                     .FirstOrDefaultAsync();
                     
@@ -161,32 +162,28 @@ namespace OrdersManagement.Controllers
                     return NotFound(new { mensaje = $"Cliente con ID {clienteId} no encontrado" });
                 }
 
-                // Obtener equipos del cliente sin incluir el cliente en cada equipo
                 var equipos = await _db.Equipos
                     .Where(e => e.ClienteId == clienteId)
                     .Include(e => e.OrdenesServicio)
                     .Select(e => new
                     {
-                        e.EquipoId,
+                        e.Id, // Modificado
                         e.Marca,
                         e.Modelo,
                         e.Serie,
                         e.TipoEquipo,
                         e.ClienteId,
-                        // Solo información básica de órdenes (sin referencia al equipo)
                         OrdenesServicio = e.OrdenesServicio != null && e.OrdenesServicio.Any()
                             ? e.OrdenesServicio.Select(o => new
                             {
-                                o.OrdenServicioId,
+                                o.Id, // Modificado
                                 o.Falla,
                                 o.FechaCreacion,
                                 o.Estado,
                                 o.Prioridad,
                                 o.Presupuesto
-                                // No incluir referencia al equipo aquí
                             }).ToList()
                             : null,
-                        // Contar órdenes activas sin traer todos los datos
                         TotalOrdenes = e.OrdenesServicio != null ? e.OrdenesServicio.Count : 0,
                         OrdenesPendientes = e.OrdenesServicio != null 
                             ? e.OrdenesServicio.Count(o => o.Estado != "Finalizada" && o.Estado != "Cancelada")
@@ -215,21 +212,16 @@ namespace OrdersManagement.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { 
-                    mensaje = "Error al obtener equipos del cliente", 
-                    error = ex.Message 
-                });
+                return StatusCode(500, new { mensaje = "Error al obtener equipos del cliente", error = ex.Message });
             }
         }
 
         // GET: api/equipo/tipo/{tipo}
-        // Listar equipos por tipo (Impresion/Computo)
         [HttpGet("tipo/{tipo}")]
         public async Task<ActionResult<object>> GetEquiposPorTipo(string tipo)
         {
             try
             {
-                // Validar tipo
                 if (string.IsNullOrWhiteSpace(tipo))
                 {
                     return BadRequest(new { mensaje = "El tipo de equipo es requerido" });
@@ -237,48 +229,39 @@ namespace OrdersManagement.Controllers
                 
                 if (tipo != "Impresion" && tipo != "Computo")
                 {
-                    return BadRequest(new { 
-                        mensaje = "El tipo debe ser 'Impresion' o 'Computo'",
-                        tipoInvalido = tipo
-                    });
+                    return BadRequest(new { mensaje = "El tipo debe ser 'Impresion' o 'Computo'", tipoInvalido = tipo });
                 }
 
-                // Obtener equipos filtrados por tipo sin incluir referencias circulares
                 var equipos = await _db.Equipos
                     .Where(e => e.TipoEquipo == tipo)
                     .Include(e => e.Cliente)
                     .Include(e => e.OrdenesServicio)
                     .Select(e => new
                     {
-                        e.EquipoId,
+                        e.Id, // Modificado
                         e.Marca,
                         e.Modelo,
                         e.Serie,
                         e.TipoEquipo,
                         e.ClienteId,
-                        // Información del cliente sin su lista de equipos
                         Cliente = e.Cliente != null ? new
                         {
-                            e.Cliente.ClienteId,
+                            e.Cliente.Id, // Modificado
                             e.Cliente.Nombre,
                             e.Cliente.Direccion,
                             e.Cliente.Telefono
-                            // No incluir Equipos aquí
                         } : null,
-                        // Resumen de órdenes de servicio sin referencias circulares
                         OrdenesServicio = e.OrdenesServicio != null && e.OrdenesServicio.Any()
                             ? e.OrdenesServicio.Select(o => new
                             {
-                                o.OrdenServicioId,
+                                o.Id, // Modificado
                                 o.Falla,
                                 o.FechaCreacion,
                                 o.Estado,
                                 o.Prioridad,
                                 o.Presupuesto
-                                //  No incluir referencia al Equipo aquí
                             }).ToList()
                             : null,
-                        // Estadísticas útiles
                         TotalOrdenes = e.OrdenesServicio != null ? e.OrdenesServicio.Count : 0,
                         OrdenesActivas = e.OrdenesServicio != null 
                             ? e.OrdenesServicio.Count(o => o.Estado != "Finalizada" && o.Estado != "Cancelada")
@@ -302,7 +285,6 @@ namespace OrdersManagement.Controllers
                     });
                 }
                 
-                // Obtener estadísticas adicionales
                 var estadisticas = new
                 {
                     PorMarca = equipos
@@ -325,21 +307,16 @@ namespace OrdersManagement.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { 
-                    mensaje = "Error al obtener equipos por tipo", 
-                    error = ex.Message 
-                });
+                return StatusCode(500, new { mensaje = "Error al obtener equipos por tipo", error = ex.Message });
             }
         }
 
         // POST: api/equipo
-        // Crear nuevo equipo
         [HttpPost]
         public async Task<ActionResult<Equipo>> CreateEquipo([FromBody] Equipo equipo)
         {
             try
             {
-                // Validar modelo
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(new 
@@ -351,14 +328,12 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Verificar si el cliente existe
                 var cliente = await _db.Clientes.FindAsync(equipo.ClienteId);
                 if (cliente == null)
                 {
                     return BadRequest(new { mensaje = $"Cliente con ID {equipo.ClienteId} no existe" });
                 }
 
-                // Verificar si ya existe un equipo con la misma serie
                 var serieExiste = await _db.Equipos
                     .AnyAsync(e => e.Serie == equipo.Serie);
                 
@@ -367,26 +342,22 @@ namespace OrdersManagement.Controllers
                     return Conflict(new { mensaje = $"Ya existe un equipo con la serie {equipo.Serie}" });
                 }
 
-                // Inicializar colección de órdenes si es null
                 if (equipo.OrdenesServicio == null)
                 {
                     equipo.OrdenesServicio = new HashSet<OrdenServicio>();
                 }
 
-                // Agregar equipo
                 await _db.Equipos.AddAsync(equipo);
                 await _db.SaveChangesAsync();
 
-                // Cargar el cliente relacionado para la respuesta
                 await _db.Entry(equipo).Reference(e => e.Cliente).LoadAsync();
 
-                // Retornar el equipo creado
-                return CreatedAtAction(nameof(GetEquipo), new { id = equipo.EquipoId }, new 
+                return CreatedAtAction(nameof(GetEquipo), new { id = equipo.Id }, new // Modificado
                 { 
                     mensaje = "Equipo creado exitosamente",
                     equipo = new
                     {
-                        equipo.EquipoId,
+                        equipo.Id, // Modificado
                         equipo.Marca,
                         equipo.Modelo,
                         equipo.Serie,
@@ -394,7 +365,7 @@ namespace OrdersManagement.Controllers
                         equipo.ClienteId,
                         Cliente = new
                         {
-                            cliente.ClienteId,
+                            cliente.Id, // Modificado
                             cliente.Nombre,
                             cliente.Direccion,
                             cliente.Telefono
@@ -409,19 +380,11 @@ namespace OrdersManagement.Controllers
         }
 
         // PUT: api/equipo/{id}
-        // Editar equipo completo
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateEquipo(int id, [FromBody] Equipo equipo)
+        public async Task<IActionResult> UpdateEquipo(int id, [FromBody] RequestUpdateEquiment equipo)
         {
             try
             {
-                // Validar que el ID coincida
-                if (id != equipo.EquipoId)
-                {
-                    return BadRequest(new { mensaje = "El ID de la URL no coincide con el ID del equipo" });
-                }
-
-                // Buscar el equipo existente
                 var equipoExistente = await _db.Equipos.FindAsync(id);
                 
                 if (equipoExistente == null)
@@ -429,7 +392,6 @@ namespace OrdersManagement.Controllers
                     return NotFound(new { mensaje = $"Equipo con ID {id} no encontrado" });
                 }
 
-                // Validar modelo
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(new 
@@ -441,48 +403,30 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Verificar si el cliente existe
-                var cliente = await _db.Clientes.FindAsync(equipo.ClienteId);
-                if (cliente == null)
-                {
-                    return BadRequest(new { mensaje = $"Cliente con ID {equipo.ClienteId} no existe" });
-                }
 
-                // Verificar si la serie ya existe en otro equipo
-                var serieExiste = await _db.Equipos
-                    .AnyAsync(e => e.Serie == equipo.Serie && e.EquipoId != id);
-                
+                var serieExiste = await _db.Equipos.AnyAsync(e => e.Serie == equipo.Serie && e.Id != id); // Modificado
                 if (serieExiste)
                 {
                     return Conflict(new { mensaje = $"La serie {equipo.Serie} ya está registrada en otro equipo" });
                 }
 
-                // Actualizar los campos
                 equipoExistente.Marca = equipo.Marca;
                 equipoExistente.Modelo = equipo.Modelo;
                 equipoExistente.Serie = equipo.Serie;
                 equipoExistente.TipoEquipo = equipo.TipoEquipo;
-                equipoExistente.ClienteId = equipo.ClienteId;
 
                 _db.Entry(equipoExistente).State = EntityState.Modified;
                 await _db.SaveChangesAsync();
-                    //Evita Referencias circulares al retornar el equipo actualizado
-                    var equipoActualizado = new
-                    {
-                        equipoExistente.EquipoId,
-                        equipoExistente.Marca,
-                        equipoExistente.Modelo,
-                        equipoExistente.Serie,
-                        equipoExistente.TipoEquipo,
-                        equipoExistente.ClienteId,
-                        Cliente = new
-                        {
-                            cliente.ClienteId,
-                            cliente.Nombre,
-                            cliente.Direccion,
-                            cliente.Telefono
-                        }
-                    };
+
+                var equipoActualizado = new
+                {
+                    equipoExistente.Id, // Modificado
+                    equipoExistente.Marca,
+                    equipoExistente.Modelo,
+                    equipoExistente.Serie,
+                    equipoExistente.TipoEquipo,
+                    equipoExistente.ClienteId,
+                };
 
                 return Ok(new 
                 { 
@@ -500,35 +444,27 @@ namespace OrdersManagement.Controllers
             }
         }
 
-
         // DELETE: api/equipo/{id}
-        // Eliminar equipo
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEquipo(int id)
         {
             try
             {
-                // Buscar el equipo con sus relaciones necesarias para validación
                 var equipo = await _db.Equipos
                     .Include(e => e.Cliente)
                     .Include(e => e.OrdenesServicio)
-                    .FirstOrDefaultAsync(e => e.EquipoId == id);
+                    .FirstOrDefaultAsync(e => e.Id == id); // Modificado
                 
                 if (equipo == null)
                 {
-                    return NotFound(new { 
-                        mensaje = $"Equipo con ID {id} no encontrado",
-                        equipoId = id
-                    });
+                    return NotFound(new { mensaje = $"Equipo con ID {id} no encontrado", equipoId = id });
                 }
 
-                // Verificar si tiene órdenes de servicio relacionadas
                 if (equipo.OrdenesServicio != null && equipo.OrdenesServicio.Any())
                 {
-                    // Obtener información de las órdenes sin referencias circulares
                     var ordenesInfo = equipo.OrdenesServicio.Select(o => new
                     {
-                        o.OrdenServicioId,
+                        o.Id, // Modificado
                         o.Falla,
                         o.Estado,
                         o.FechaCreacion,
@@ -547,24 +483,22 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Guardar información del equipo para la respuesta
                 var equipoInfo = new
                 {
-                    equipo.EquipoId,
+                    equipo.Id, // Modificado
                     equipo.Marca,
                     equipo.Modelo,
                     equipo.Serie,
                     equipo.TipoEquipo,
                     Cliente = equipo.Cliente != null ? new
                     {
-                        equipo.Cliente.ClienteId,
+                        equipo.Cliente.Id, // Modificado
                         equipo.Cliente.Nombre,
                         equipo.Cliente.Direccion,
                         equipo.Cliente.Telefono
                     } : null
                 };
 
-                // Eliminar el equipo
                 _db.Equipos.Remove(equipo);
                 await _db.SaveChangesAsync();
 
@@ -577,23 +511,15 @@ namespace OrdersManagement.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                return StatusCode(409, new { 
-                    mensaje = "Error de concurrencia. El equipo fue modificado o eliminado por otro usuario",
-                    equipoId = id
-                });
+                return StatusCode(409, new { mensaje = "Error de concurrencia. El equipo fue modificado o eliminado por otro usuario", equipoId = id });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { 
-                    mensaje = "Error interno del servidor al eliminar el equipo",
-                    error = ex.Message,
-                    equipoId = id
-                });
+                return StatusCode(500, new { mensaje = "Error interno del servidor al eliminar el equipo", error = ex.Message, equipoId = id });
             }
         }
 
         // GET: api/equipo/sin-ordenes
-        // Listar equipos que no tienen órdenes de servicio
         [HttpGet("sin-ordenes")]
         public async Task<ActionResult<IEnumerable<Equipo>>> GetEquiposSinOrdenes()
         {
@@ -608,12 +534,29 @@ namespace OrdersManagement.Controllers
                 {
                     return NotFound(new { mensaje = "Todos los equipos tienen órdenes de servicio asociadas" });
                 }
+
+                var equiposMapeados = equipos.Select(e => new
+                {
+                    e.Id, // Modificado
+                    e.Marca,
+                    e.Modelo,
+                    e.Serie,
+                    e.TipoEquipo,
+                    e.ClienteId,
+                    Cliente = e.Cliente != null ? new
+                    {
+                        e.Cliente.Id, // Modificado
+                        e.Cliente.Nombre,
+                        e.Cliente.Direccion,
+                        e.Cliente.Telefono
+                    } : null
+                });
                 
                 return Ok(new 
                 { 
-                    mensaje = $"Equipos sin órdenes de servicio",
+                    mensaje = "Equipos sin órdenes de servicio",
                     total = equipos.Count,
-                    equipos = equipos 
+                    equipos = equiposMapeados 
                 });
             }
             catch (Exception ex)

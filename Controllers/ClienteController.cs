@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ordersmanagement.Models.requests;
 using OrdersManagement.Data;
 using OrdersManagement.Models;
 using System.Text.Json;
@@ -18,67 +19,73 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/cliente
-        // Listar todos los clientes
         [HttpGet]
         public async Task<ActionResult<object>> GetClientes()
         {
             try
             {
-                var clientes = await _db.Clientes
+                var clientesDb = await _db.Clientes
                     .Include(c => c.Equipos)
-                    .Select(c => new
-                    {
-                        c.ClienteId,
-                        c.Nombre,
-                        c.Direccion,
-                        c.Telefono,
-                        // Resumen de equipos sin referencias circulares
-                        Equipos = c.Equipos != null && c.Equipos.Any()
-                            ? new
-                            {
-                                Total = c.Equipos.Count,
-                                Impresoras = c.Equipos.Count(e => e.TipoEquipo == "Impresion"),
-                                Computos = c.Equipos.Count(e => e.TipoEquipo == "Computo"),
-                                UltimosEquipos = c.Equipos
-                                    .OrderByDescending(e => e.EquipoId)
-                                    .Take(5)
-                                    .Select(e => new
-                                    {
-                                        e.EquipoId,
-                                        e.Marca,
-                                        e.Modelo,
-                                        e.Serie,
-                                        e.TipoEquipo
-                                    })
-                            } : null,
-                        TotalEquipos = c.Equipos != null ? c.Equipos.Count : 0
-                    })
+                    .Include(c => c.Sucursales)
                     .OrderBy(c => c.Nombre)
                     .ToListAsync();
 
-                if (clientes == null || clientes.Count == 0)
+                if (clientesDb.Count == 0)
                 {
-                    return NotFound(new { mensaje = "No hay clientes registrados" });
+                    return Ok(new
+                    {
+                        mensaje = "No hay clientes registrados",
+                        total = 0,
+                        estadisticas = "",
+                        clientes = Array.Empty<Cliente>()
+                    });
                 }
 
-                // Estadísticas generales
+                var clientes = clientesDb.Select(c => new
+                {
+                    c.Id, // Modificado
+                    c.Nombre,
+                    c.Direccion,
+                    c.Telefono,
+                    Equipos = new
+                    {
+                        Total = c.Equipos?.Count,
+                        Impresoras = c.Equipos?.Count(e => e.TipoEquipo == "Impresion"),
+                        Computos = c.Equipos?.Count(e => e.TipoEquipo == "Computo"),
+                        UltimosEquipos = c.Equipos?
+                            .OrderByDescending(e => e.Id) // Modificado
+                            .Take(5)
+                            .Select(e => new
+                            {
+                                e.Id, // Modificado
+                                e.Marca,
+                                e.Modelo,
+                                e.Serie,
+                                e.TipoEquipo
+                            }).ToList()
+                    },
+                    TotalEquipos = c.Equipos?.Count,
+                    TotalSucursales = c.Sucursales?.Count
+                }).ToList();
+
                 var estadisticas = new
                 {
                     TotalClientes = clientes.Count,
                     TotalEquipos = clientes.Sum(c => c.TotalEquipos),
-                    TotalImpresoras = clientes.Sum(c => c.Equipos?.Impresoras ?? 0),
-                    TotalComputos = clientes.Sum(c => c.Equipos?.Computos ?? 0),
+                    TotalImpresoras = clientes.Sum(c => c.Equipos.Impresoras),
+                    TotalComputos = clientes.Sum(c => c.Equipos.Computos),
                     ClientesConEquipos = clientes.Count(c => c.TotalEquipos > 0),
                     ClientesSinEquipos = clientes.Count(c => c.TotalEquipos == 0)
                 };
 
-                return Ok(new
-                {
-                    mensaje = "Clientes obtenidos exitosamente",
-                    total = clientes.Count,
-                    estadisticas = estadisticas,
-                    clientes = clientes
-                });
+                // return Ok(new
+                // {
+                //     mensaje = "Clientes obtenidos exitosamente",
+                //     total = clientes.Count,
+                //     estadisticas = estadisticas,
+                //     clientes = clientes
+                // });
+                return Ok(clientes);
             }
             catch (Exception ex)
             {
@@ -87,7 +94,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/cliente/{id}
-        // Buscar cliente por ID
         [HttpGet("{id}")]
         public async Task<ActionResult<object>> GetCliente(int id)
         {
@@ -95,27 +101,24 @@ namespace OrdersManagement.Controllers
             {
                 var cliente = await _db.Clientes
                     .Include(c => c.Equipos)
-                    .Where(c => c.ClienteId == id)
+                    .Where(c => c.Id == id) // Modificado
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Direccion,
                         c.Telefono,
-                        // Lista completa de equipos sin referencias circulares
                         Equipos = c.Equipos != null && c.Equipos.Any()
                             ? c.Equipos.Select(e => new
                             {
-                                e.EquipoId,
+                                e.Id, // Modificado
                                 e.Marca,
                                 e.Modelo,
                                 e.Serie,
                                 e.TipoEquipo,
-                                // No incluir Cliente aquí para evitar ciclo
                                 OrdenesCount = e.OrdenesServicio != null ? e.OrdenesServicio.Count : 0
                             }).ToList()
                             : null,
-                        // Estadísticas del cliente
                         Estadisticas = new
                         {
                             TotalEquipos = c.Equipos != null ? c.Equipos.Count : 0,
@@ -146,7 +149,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/cliente/buscar/{nombre}
-        // Buscar clientes por nombre
         [HttpGet("buscar/{nombre}")]
         public async Task<ActionResult<object>> BuscarClientesPorNombre(string nombre)
         {
@@ -161,7 +163,7 @@ namespace OrdersManagement.Controllers
                     .Where(c => c.Nombre != null && c.Nombre.Contains(nombre))
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Direccion,
                         c.Telefono,
@@ -190,7 +192,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/cliente/telefono/{telefono}
-        // Buscar cliente por teléfono
         [HttpGet("telefono/{telefono}")]
         public async Task<ActionResult<object>> BuscarClientePorTelefono(string telefono)
         {
@@ -205,7 +206,7 @@ namespace OrdersManagement.Controllers
                     .Where(c => c.Telefono == telefono)
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Direccion,
                         c.Telefono,
@@ -231,7 +232,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/cliente/con-equipos
-        // Listar clientes que tienen equipos registrados
         [HttpGet("con-equipos")]
         public async Task<ActionResult<object>> GetClientesConEquipos()
         {
@@ -242,13 +242,13 @@ namespace OrdersManagement.Controllers
                     .Include(c => c.Equipos)
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Direccion,
                         c.Telefono,
                         Equipos = c.Equipos != null ? c.Equipos.Select(e => new
                         {
-                            e.EquipoId,
+                            e.Id, // Modificado
                             e.Marca,
                             e.Modelo,
                             e.TipoEquipo
@@ -277,7 +277,6 @@ namespace OrdersManagement.Controllers
         }
 
         // GET: api/cliente/sin-equipos
-        // Listar clientes que no tienen equipos registrados
         [HttpGet("sin-equipos")]
         public async Task<ActionResult<object>> GetClientesSinEquipos()
         {
@@ -287,7 +286,7 @@ namespace OrdersManagement.Controllers
                     .Where(c => c.Equipos == null || !c.Equipos.Any())
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Direccion,
                         c.Telefono,
@@ -315,13 +314,11 @@ namespace OrdersManagement.Controllers
         }
 
         // POST: api/cliente
-        // Crear nuevo cliente
         [HttpPost]
         public async Task<ActionResult<object>> CreateCliente([FromBody] Cliente cliente)
         {
             try
             {
-                // Validar modelo
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(new
@@ -333,13 +330,11 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Validar que el teléfono tenga 10 dígitos
                 if (cliente.Telefono != null && cliente.Telefono.Length != 10)
                 {
                     return BadRequest(new { mensaje = "El teléfono debe tener exactamente 10 dígitos" });
                 }
 
-                // Verificar si ya existe un cliente con el mismo teléfono
                 var telefonoExiste = await _db.Clientes
                     .AnyAsync(c => c.Telefono == cliente.Telefono);
 
@@ -348,27 +343,24 @@ namespace OrdersManagement.Controllers
                     return Conflict(new { mensaje = $"Ya existe un cliente con el teléfono {cliente.Telefono}" });
                 }
 
-                // Inicializar colección de equipos si es null
                 if (cliente.Equipos == null)
                 {
                     cliente.Equipos = new HashSet<Equipo>();
                 }
 
-                // Agregar cliente
                 await _db.Clientes.AddAsync(cliente);
                 await _db.SaveChangesAsync();
 
-                // Respuesta sin referencias circulares
                 var clienteCreado = new
                 {
-                    cliente.ClienteId,
+                    cliente.Id, // Modificado
                     cliente.Nombre,
                     cliente.Direccion,
                     cliente.Telefono,
                     TotalEquipos = 0
                 };
 
-                return CreatedAtAction(nameof(GetCliente), new { id = cliente.ClienteId }, new
+                return CreatedAtAction(nameof(GetCliente), new { id = cliente.Id }, new // Modificado
                 {
                     mensaje = "Cliente creado exitosamente",
                     cliente = clienteCreado
@@ -376,39 +368,25 @@ namespace OrdersManagement.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { mensaje = "Error interno del servidor", error = ex.Message });
+                var innerMessage = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                return StatusCode(500, new { mensaje = "Error interno del servidor", error = innerMessage });
             }
         }
 
         // PUT: api/cliente/{id}
-        // Editar cliente completo
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCliente(int id, [FromBody] Cliente cliente)
+        public async Task<IActionResult> UpdateCliente(int id, [FromBody] RequestUpdateClient cliente)
         {
             try
             {
-                // Validar que el ID coincida
-                if (id != cliente.ClienteId)
-                {
-                    return BadRequest(new
-                    {
-                        mensaje = "El ID de la URL no coincide con el ID del cliente",
-                        urlId = id,
-                        bodyId = cliente.ClienteId
-                    });
-                }
-
-                // Buscar el cliente existente
                 var clienteExistente = await _db.Clientes
-                    .Include(c => c.Equipos)
-                    .FirstOrDefaultAsync(c => c.ClienteId == id);
+                    .FirstOrDefaultAsync(c => c.Id == id); // Modificado
 
                 if (clienteExistente == null)
                 {
                     return NotFound(new { mensaje = $"Cliente con ID {id} no encontrado" });
                 }
 
-                // Validar modelo
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(new
@@ -420,22 +398,19 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Validar que el teléfono tenga 10 dígitos
                 if (cliente.Telefono != null && cliente.Telefono.Length != 10)
                 {
                     return BadRequest(new { mensaje = "El teléfono debe tener exactamente 10 dígitos" });
                 }
 
-                // Verificar si el teléfono ya existe en otro cliente
                 var telefonoExiste = await _db.Clientes
-                    .AnyAsync(c => c.Telefono == cliente.Telefono && c.ClienteId != id);
+                    .AnyAsync(c => c.Telefono == cliente.Telefono && c.Id != id); // Modificado
 
                 if (telefonoExiste)
                 {
                     return Conflict(new { mensaje = $"El teléfono {cliente.Telefono} ya está registrado por otro cliente" });
                 }
 
-                // Actualizar campos (no actualizar Equipos aquí)
                 clienteExistente.Nombre = cliente.Nombre;
                 clienteExistente.Direccion = cliente.Direccion;
                 clienteExistente.Telefono = cliente.Telefono;
@@ -443,14 +418,12 @@ namespace OrdersManagement.Controllers
                 _db.Entry(clienteExistente).State = EntityState.Modified;
                 await _db.SaveChangesAsync();
 
-                // Respuesta sin referencias circulares
                 var clienteActualizado = new
                 {
-                    clienteExistente.ClienteId,
+                    clienteExistente.Id, // Modificado
                     clienteExistente.Nombre,
                     clienteExistente.Direccion,
                     clienteExistente.Telefono,
-                    TotalEquipos = clienteExistente.Equipos != null ? clienteExistente.Equipos.Count : 0
                 };
 
                 return Ok(new
@@ -470,7 +443,6 @@ namespace OrdersManagement.Controllers
         }
 
         // PATCH: api/cliente/{id}
-        // Editar cliente parcialmente
         [HttpPatch("{id}")]
         public async Task<IActionResult> PatchCliente(int id, [FromBody] JsonElement updates)
         {
@@ -483,7 +455,6 @@ namespace OrdersManagement.Controllers
                     return NotFound(new { mensaje = $"Cliente con ID {id} no encontrado" });
                 }
 
-                // Aplicar actualizaciones solo a los campos enviados
                 if (updates.TryGetProperty("Nombre", out var nombreProp))
                 {
                     cliente.Nombre = nombreProp.GetString();
@@ -503,9 +474,8 @@ namespace OrdersManagement.Controllers
                         return BadRequest(new { mensaje = "El teléfono debe tener exactamente 10 dígitos" });
                     }
 
-                    // Verificar si el teléfono ya existe en otro cliente
                     var telefonoExiste = await _db.Clientes
-                        .AnyAsync(c => c.Telefono == nuevoTelefono && c.ClienteId != id);
+                        .AnyAsync(c => c.Telefono == nuevoTelefono && c.Id != id); // Modificado
 
                     if (telefonoExiste)
                     {
@@ -519,7 +489,7 @@ namespace OrdersManagement.Controllers
 
                 var clienteActualizado = new
                 {
-                    cliente.ClienteId,
+                    cliente.Id, // Modificado
                     cliente.Nombre,
                     cliente.Direccion,
                     cliente.Telefono
@@ -538,16 +508,14 @@ namespace OrdersManagement.Controllers
         }
 
         // DELETE: api/cliente/{id}
-        // Eliminar cliente
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCliente(int id)
         {
             try
             {
-                // Buscar el cliente con sus relaciones
                 var cliente = await _db.Clientes
                     .Include(c => c.Equipos)
-                    .FirstOrDefaultAsync(c => c.ClienteId == id);
+                    .FirstOrDefaultAsync(c => c.Id == id); // Modificado
 
                 if (cliente == null)
                 {
@@ -558,7 +526,6 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Verificar si tiene equipos asociados
                 var tieneEquipos = cliente.Equipos != null && cliente.Equipos.Any();
 
                 if (tieneEquipos)
@@ -570,7 +537,7 @@ namespace OrdersManagement.Controllers
                         clienteNombre = cliente.Nombre,
                         equiposAsociados = cliente.Equipos.Select(e => new
                         {
-                            e.EquipoId,
+                            e.Id, // Modificado
                             e.Marca,
                             e.Modelo,
                             e.Serie,
@@ -580,16 +547,14 @@ namespace OrdersManagement.Controllers
                     });
                 }
 
-                // Guardar información para la respuesta
                 var clienteInfo = new
                 {
-                    cliente.ClienteId,
+                    cliente.Id, // Modificado
                     cliente.Nombre,
                     cliente.Direccion,
                     cliente.Telefono
                 };
 
-                // Eliminar el cliente
                 _db.Clientes.Remove(cliente);
                 await _db.SaveChangesAsync();
 
@@ -602,25 +567,15 @@ namespace OrdersManagement.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                return StatusCode(409, new
-                {
-                    mensaje = "Error de concurrencia. El cliente fue modificado por otro usuario",
-                    clienteId = id
-                });
+                return StatusCode(409, new { mensaje = "Error de concurrencia. El cliente fue modificado por otro usuario", clienteId = id });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    mensaje = "Error interno del servidor al eliminar el cliente",
-                    error = ex.Message,
-                    clienteId = id
-                });
+                return StatusCode(500, new { mensaje = "Error interno del servidor al eliminar el cliente", error = ex.Message, clienteId = id });
             }
         }
 
         // GET: api/cliente/resumen
-        // Resumen general de clientes
         [HttpGet("resumen")]
         public async Task<ActionResult<object>> GetResumenClientes()
         {
@@ -635,7 +590,7 @@ namespace OrdersManagement.Controllers
                     .Where(c => c.Equipos != null && c.Equipos.Any())
                     .Select(c => new
                     {
-                        c.ClienteId,
+                        c.Id, // Modificado
                         c.Nombre,
                         c.Telefono,
                         TotalEquipos = c.Equipos != null ? c.Equipos.Count : 0
